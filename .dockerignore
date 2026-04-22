@@ -1,0 +1,9 @@
+node_modules
+.git
+data/
+*.tsbuildinfo
+dist
+coverage
+.env
+.DS_Store
+apps/*/.vite

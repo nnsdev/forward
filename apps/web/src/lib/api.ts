@@ -13,6 +13,7 @@ import type {
   ProviderConfig,
   ProviderListResponse,
   ProviderModelsResponse,
+  RetryChatInput,
   SessionResponse,
   UpdateCharacterInput,
   UpdateChatInput,
@@ -127,8 +128,26 @@ export const api = {
       throw new Error(`failed to delete chat ${chatId}`);
     }
   },
+  async deleteMessage(messageId: string): Promise<void> {
+    const response = await request(`/messages/${messageId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`failed to delete message ${messageId}`);
+    }
+  },
   async generate(chatId: string, input: GenerateChatInput, onEvent: (event: NormalizedStreamEvent) => void, signal?: AbortSignal): Promise<void> {
     const response = await request(`/chats/${chatId}/generate`, {
+      body: JSON.stringify(input),
+      method: 'POST',
+      signal,
+    });
+
+    await readSseStream(response, onEvent, signal);
+  },
+  async retryChat(chatId: string, input: RetryChatInput, onEvent: (event: NormalizedStreamEvent) => void, signal?: AbortSignal): Promise<void> {
+    const response = await request(`/chats/${chatId}/retry`, {
       body: JSON.stringify(input),
       method: 'POST',
       signal,
@@ -193,6 +212,17 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Logout failed');
+    }
+  },
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const response = await request('/auth/change-password', {
+      body: JSON.stringify({ currentPassword, newPassword }),
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'Failed to change password' })) as { error?: string };
+      throw new Error(data.error ?? `Failed to change password (${response.status})`);
     }
   },
   async updateChat(chatId: string, input: UpdateChatInput): Promise<Chat> {

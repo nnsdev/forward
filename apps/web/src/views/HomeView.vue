@@ -26,11 +26,30 @@
           :class="chat.id === chatStore.activeChatId ? 'bg-white/[0.06] text-white' : 'text-white/45 hover:bg-white/[0.03] hover:text-white/75'"
           @click="chatStore.selectChat(chat.id)"
         >
-          <div class="flex items-center gap-1.5">
+          <div v-if="renamingChatId === chat.id" class="flex items-center gap-1.5" @click.stop>
+            <input
+              ref="renameInputRef"
+              v-model="renameTitle"
+              class="min-w-0 flex-1 rounded border border-[var(--rp-accent)]/30 bg-white/[0.02] px-1.5 py-0.5 text-sm text-white outline-none"
+              @keydown.enter="saveRename(chat.id)"
+              @keydown.escape="cancelRename"
+              @blur="saveRename(chat.id)"
+            />
+          </div>
+          <div v-else class="flex items-center gap-1.5">
             <p class="truncate font-medium flex-1">{{ chat.title }}</p>
             <button
-              class="hidden shrink-0 text-[10px] text-white/20 group-hover:inline hover:text-white/50"
+              class="hidden shrink-0 text-[10px] text-white/20 hover:text-white/50 group-hover:inline"
               type="button"
+              title="Rename"
+              @click.stop="startRename(chat.id, chat.title)"
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 2l3 3L5 14H2v-3z"/></svg>
+            </button>
+            <button
+              class="hidden shrink-0 text-[10px] text-white/20 hover:text-rose-300/60 group-hover:inline"
+              type="button"
+              title="Delete"
               @click.stop="confirmDeleteChat(chat.id)"
             >
               &times;
@@ -61,6 +80,12 @@
         >
           Prompt inspector
         </RouterLink>
+        <button
+          class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
+          @click="showPasswordChange = true"
+        >
+          Change password
+        </button>
         <button
           class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
           @click="logout"
@@ -158,8 +183,11 @@
               :content="message.content || (message.role === 'assistant' && message.reasoningContent ? 'Reasoning only response' : '')"
               :reasoning="message.reasoningContent"
               :role="message.role"
+              :message-id="message.id"
               :character-name="message.role === 'assistant' ? chatStore.activeCharacter?.name : undefined"
               :character-avatar-path="message.role === 'assistant' ? chatStore.activeCharacter?.avatarAssetPath : undefined"
+              @retry="handleRetry"
+              @delete="handleDeleteMessage"
             />
           </div>
           <div v-if="chatStore.generating" class="mt-4 flex items-center gap-2 text-xs text-white/20">
@@ -498,6 +526,9 @@
             >
               <p class="text-sm font-medium text-white/75">{{ provider.name }}</p>
               <p class="mt-0.5 text-[11px] text-white/25">{{ provider.model }} &middot; {{ provider.providerType }}</p>
+              <div v-if="providerModels[provider.id]" class="mt-1.5 rounded-lg border border-white/5 bg-black/20 px-2 py-1.5">
+                <p v-for="model in providerModels[provider.id]" :key="model.id" class="text-[10px] text-white/35">{{ model.id }}</p>
+              </div>
               <div class="mt-2 flex gap-1.5">
                 <button
                   class="rounded px-2 py-0.5 text-[11px] transition hover:text-white/60"
@@ -506,6 +537,9 @@
                   @click="assignProvider(provider.id)"
                 >
                   {{ chatStore.activeChat?.providerConfigId === provider.id ? 'Active' : 'Use' }}
+                </button>
+                <button class="rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50" type="button" @click="fetchModels(provider.id)">
+                  Models
                 </button>
                 <button class="rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50" type="button" @click="editProvider(provider.id)">
                   Edit
@@ -544,6 +578,42 @@
     </div>
   </div>
 
+  <div v-if="showPasswordChange" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showPasswordChange = false">
+    <div class="w-80 rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
+      <p class="text-sm font-medium text-white/85">Change password</p>
+      <form class="mt-4 space-y-3" @submit.prevent="changePassword">
+        <input
+          v-model="passwordForm.current"
+          class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+          placeholder="Current password"
+          type="password"
+        />
+        <input
+          v-model="passwordForm.next"
+          class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+          placeholder="New password"
+          type="password"
+        />
+        <p v-if="passwordError" class="text-xs text-rose-300">{{ passwordError }}</p>
+        <div class="flex gap-2">
+          <button
+            class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+            type="button"
+            @click="showPasswordChange = false"
+          >
+            Cancel
+          </button>
+          <button
+            class="flex-1 rounded-lg bg-[var(--rp-accent)] px-3 py-2 text-sm font-medium text-[#0a1212] transition hover:brightness-110"
+            type="submit"
+          >
+            Update
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <p v-if="chatStore.error" class="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-lg bg-rose-500/10 px-4 py-2 text-sm text-rose-300/80 rp-animate-fade">
     {{ chatStore.error }}
   </p>
@@ -555,6 +625,7 @@ import { reactive, onMounted, ref, computed, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { getApiBaseUrl } from '../lib/config';
+import { api } from '../lib/api';
 import MessageCard from '../components/MessageCard.vue';
 import { useChatStore } from '../stores/chat';
 import { useSessionStore } from '../stores/session';
@@ -569,8 +640,14 @@ const editingPresetId = ref<string | null>(null);
 const editingProviderId = ref<string | null>(null);
 const presetPanelOpen = ref(false);
 const providerPanelOpen = ref(false);
+const renameInputRef = ref<HTMLInputElement | null>(null);
+const renameTitle = ref('');
+const renamingChatId = ref<string | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const sidebarOpen = ref(false);
+const showPasswordChange = ref(false);
+const passwordError = ref('');
+const passwordForm = reactive({ current: '', next: '' });
 const characterForm = reactive<CreateCharacterInput>({
   avatarAssetPath: null,
   description: '',
@@ -596,6 +673,7 @@ const providerForm = reactive<CreateProviderConfigInput>({
   providerType: 'openai-compatible',
   reasoningEnabled: false,
 });
+const providerModels = ref<Record<string, Array<{ id: string }>>>({});
 const router = useRouter();
 const sessionStore = useSessionStore();
 let firstMessageSent = false;
@@ -835,6 +913,15 @@ async function removeProvider(providerId: string) {
   await chatStore.deleteProviderConfig(providerId);
 }
 
+async function fetchModels(providerId: string) {
+  try {
+    const response = await api.listProviderModels(providerId);
+    providerModels.value[providerId] = response.models;
+  } catch {
+    providerModels.value[providerId] = [];
+  }
+}
+
 async function logout() {
   await sessionStore.logout();
   await router.push('/login');
@@ -846,5 +933,58 @@ async function submitMessage() {
   composer.value = '';
   if (composerRef.value) composerRef.value.style.height = 'auto';
   await chatStore.sendMessage(nextMessage);
+}
+
+function startRename(chatId: string, currentTitle: string) {
+  renamingChatId.value = chatId;
+  renameTitle.value = currentTitle;
+  nextTick(() => {
+    renameInputRef.value?.focus();
+    renameInputRef.value?.select();
+  });
+}
+
+function cancelRename() {
+  renamingChatId.value = null;
+  renameTitle.value = '';
+}
+
+async function saveRename(chatId: string) {
+  const title = renameTitle.value.trim();
+  if (!title) {
+    cancelRename();
+    return;
+  }
+
+  if (renamingChatId.value === chatId) {
+    renamingChatId.value = null;
+  }
+
+  await chatStore.renameChat(chatId, title);
+}
+
+async function handleRetry(messageId: string) {
+  await chatStore.retryGeneration();
+}
+
+async function handleDeleteMessage(messageId: string) {
+  await chatStore.deleteMessage(messageId);
+}
+
+async function changePassword() {
+  if (!passwordForm.current || !passwordForm.next) {
+    passwordError.value = 'Both fields are required';
+    return;
+  }
+
+  try {
+    await api.changePassword(passwordForm.current, passwordForm.next);
+    passwordForm.current = '';
+    passwordForm.next = '';
+    passwordError.value = '';
+    showPasswordChange.value = false;
+  } catch (error) {
+    passwordError.value = error instanceof Error ? error.message : 'Failed to change password';
+  }
 }
 </script>

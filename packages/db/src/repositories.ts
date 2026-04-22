@@ -68,8 +68,10 @@ export interface MessageRepository {
   appendContent(id: string, delta: string): Promise<Message>;
   appendReasoning(id: string, delta: string): Promise<Message>;
   create(input: CreateMessageInput): Promise<Message>;
+  delete(id: string): Promise<void>;
   getById(id: string): Promise<Message | null>;
   listByChatId(chatId: string): Promise<Message[]>;
+  updateContent(id: string, content: string): Promise<Message>;
   updateState(id: string, state: MessageState): Promise<Message>;
 }
 
@@ -572,6 +574,30 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
     },
     async listByChatId(chatId) {
       return client.db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(messages.createdAt).all().map(mapMessage);
+    },
+    async delete(id) {
+      const existing = getRequiredMessage(id);
+      const timestamp = nowIso();
+
+      client.db.delete(messages).where(eq(messages.id, id)).run();
+      touchChat(existing.chatId, timestamp);
+    },
+    async updateContent(id, content) {
+      const existing = getRequiredMessage(id);
+      const timestamp = nowIso();
+
+      client.db
+        .update(messages)
+        .set({
+          content,
+          updatedAt: timestamp,
+        })
+        .where(eq(messages.id, id))
+        .run();
+
+      touchChat(existing.chatId, timestamp);
+
+      return mapMessage(getRequiredMessage(id));
     },
     async updateState(id, state) {
       const existing = getRequiredMessage(id);

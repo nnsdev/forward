@@ -7,8 +7,10 @@ import {
   type Preset,
   ProviderListResponseSchema,
   ProviderModelsResponseSchema,
+  RetryChatInputSchema,
   SessionResponseSchema,
   StreamEventSchema,
+  UpdateMessageContentSchema,
   type Character,
   type Chat,
   type ProviderConfig,
@@ -86,6 +88,12 @@ const UpdateChatRouteSchema = z
     title: z.string().min(1).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'At least one field must be updated');
+
+const RetryChatRouteSchema = z.object({
+  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  providerConfigId: z.string().min(1).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+});
 
 const CreateMessageRouteSchema = z.object({
   content: z.string().min(1),
@@ -198,6 +206,24 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.body(null, 204);
   });
 
+  app.post('/auth/change-password', requireAuth(config), async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const currentPassword = String(body.currentPassword ?? '');
+    const newPassword = String(body.newPassword ?? '');
+
+    if (!currentPassword || !newPassword) {
+      return c.json({ error: 'currentPassword and newPassword are required' }, 400);
+    }
+
+    if (currentPassword !== config.appPassword) {
+      return c.json({ error: 'Current password is incorrect' }, 401);
+    }
+
+    config.appPassword = newPassword;
+
+    return c.json({ ok: true });
+  });
+
   app.use('/providers', requireAuth(config));
   app.use('/providers/*', requireAuth(config));
   app.use('/presets', requireAuth(config));
@@ -206,6 +232,8 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
   app.use('/characters/*', requireAuth(config));
   app.use('/chats', requireAuth(config));
   app.use('/chats/*', requireAuth(config));
+  app.use('/messages', requireAuth(config));
+  app.use('/messages/*', requireAuth(config));
   app.use('/debug/*', requireAuth(config));
 
   app.get('/characters', async (c) => c.json(await dependencies.characters.list()));
@@ -445,6 +473,133 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         role: 'user',
       });
       const history = await dependencies.messages.listByChatId(chat.id);
+      const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const promptPreview = buildPromptPreview({
+        character,
+        chatId: chat.id,
+        config,
+        messages: history,
+        preset,
+        provider: providerConfig,
+      });
+      const assistantMessage = await dependencies.messages.create({
+        chatId: chat.id,
+        content: '',
+        reasoningContent: '',
+        role: 'assistant',
+        state: 'streaming',
+      });
+      const adapter = dependencies.createProviderAdapter(providerConfig);
+
+      return streamSSE(c, async (stream) => {
+        let completed = false;
+
+        await writeStreamEvent(stream, {
+          chatId: chat.id,
+          messageId: assistantMessage.id,
+          type: 'response.started',
+        });
+
+        try {
+          for await (const chunk of adapter.streamGenerate({
+            maxOutputTokens: request.maxOutputTokens ?? preset.maxOutputTokens,
+            messages: promptPreview.messages,
+            model: providerConfig.model,
+            stop: preset.stopStrings,
+            temperature: request.temperature ?? preset.temperature,
+            topP: preset.topP,
+          })) {
+            if (chunk.kind === 'reasoning' && chunk.text) {
+              await dependencies.messages.appendReasoning(assistantMessage.id, chunk.text);
+              await writeStreamEvent(stream, {
+                chatId: chat.id,
+                messageId: assistantMessage.id,
+                text: chunk.text,
+                type: 'reasoning.delta',
+              });
+            }
+
+            if (chunk.kind === 'content' && chunk.text) {
+              await dependencies.messages.appendContent(assistantMessage.id, chunk.text);
+              await writeStreamEvent(stream, {
+                chatId: chat.id,
+                messageId: assistantMessage.id,
+                text: chunk.text,
+                type: 'content.delta',
+              });
+            }
+
+            if (chunk.kind === 'done' && !completed) {
+              completed = true;
+              await dependencies.messages.updateState(assistantMessage.id, 'completed');
+              await writeStreamEvent(stream, {
+                chatId: chat.id,
+                messageId: assistantMessage.id,
+                type: 'response.completed',
+              });
+            }
+          }
+
+          if (!completed) {
+            await dependencies.messages.updateState(assistantMessage.id, 'completed');
+            await writeStreamEvent(stream, {
+              chatId: chat.id,
+              messageId: assistantMessage.id,
+              type: 'response.completed',
+            });
+          }
+        } catch (error) {
+          await dependencies.messages.updateState(assistantMessage.id, 'failed');
+          await writeStreamEvent(stream, {
+            chatId: chat.id,
+            error: error instanceof Error ? error.message : 'Unknown provider error',
+            messageId: assistantMessage.id,
+            type: 'response.error',
+          });
+        }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Chat not found') {
+        return c.json({ error: error.message }, 404);
+      }
+
+      throw error;
+    }
+  });
+
+  app.delete('/messages/:messageId', async (c) => {
+    await dependencies.messages.delete(c.req.param('messageId'));
+
+    return c.body(null, 204);
+  });
+
+  app.patch('/messages/:messageId', async (c) => {
+    const input = UpdateMessageContentSchema.parse(await c.req.json());
+    const message = await dependencies.messages.updateContent(c.req.param('messageId'), input.content);
+
+    return c.json(message);
+  });
+
+  app.post('/chats/:chatId/retry', async (c) => {
+    try {
+      const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
+      const request = RetryChatRouteSchema.parse(await c.req.json());
+      const allMessages = await dependencies.messages.listByChatId(chat.id);
+      const lastAssistantIndex = allMessages.reduce((acc, m, i) => m.role === 'assistant' ? i : acc, -1);
+
+      if (lastAssistantIndex === -1) {
+        return c.json({ error: 'No assistant message to retry' }, 400);
+      }
+
+      await dependencies.messages.delete(allMessages[lastAssistantIndex].id);
+      const history = await dependencies.messages.listByChatId(chat.id);
+      const providerConfig = await resolveProviderConfig(dependencies, chat, request.providerConfigId);
+      const preset = await resolvePreset(dependencies, chat);
+
+      if (!providerConfig || !preset) {
+        return c.json({ error: !providerConfig ? 'Provider not found' : 'Preset not found' }, 404);
+      }
+
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const promptPreview = buildPromptPreview({
         character,

@@ -131,6 +131,16 @@ export const GenerateChatInputSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
 });
 
+export const UpdateMessageContentSchema = z.object({
+  content: z.string().min(1),
+});
+
+export const RetryChatInputSchema = z.object({
+  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  providerConfigId: z.string().min(1).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+});
+
 export type Character = z.infer<typeof CharacterSchema>;
 export type Chat = z.infer<typeof ChatSchema>;
 export type CreateChatInput = z.infer<typeof CreateChatInputSchema>;
@@ -147,5 +157,7 @@ export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 export type UpdateCharacterInput = z.infer<typeof UpdateCharacterInputSchema>;
 export type UpdateChatInput = z.infer<typeof UpdateChatInputSchema>;
+export type UpdateMessageContentInput = z.infer<typeof UpdateMessageContentSchema>;
 export type UpdatePresetInput = z.infer<typeof UpdatePresetInputSchema>;
 export type UpdateProviderConfigInput = z.infer<typeof UpdateProviderConfigInputSchema>;
+export type RetryChatInput = z.infer<typeof RetryChatInputSchema>;

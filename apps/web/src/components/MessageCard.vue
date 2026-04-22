@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="role === 'assistant'"
-    class="flex gap-3 rp-animate-enter"
+    class="group relative flex gap-3 rp-animate-enter"
   >
     <div
       v-if="avatarUrl"
@@ -35,14 +35,42 @@
         {{ reasoningOpen ? 'Hide thinking' : 'Show thinking' }}
       </button>
     </div>
+    <div v-if="messageId" class="absolute -top-1 right-0 flex gap-1 opacity-0 transition group-hover:opacity-100">
+      <button
+        type="button"
+        class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/60"
+        title="Retry"
+        @click="$emit('retry', messageId)"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v4h4"/><path d="M3.5 12.5A6 6 0 1 0 3 4l2 4"/></svg>
+      </button>
+      <button
+        type="button"
+        class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-rose-300/70"
+        title="Delete"
+        @click="$emit('delete', messageId)"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5.3 4V2.7a.7.7 0 0 1 .7-.7h4a.7.7 0 0 1 .7.7V4m2 0v9.3a.7.7 0 0 1-.7.7H4a.7.7 0 0 1-.7-.7V4"/><path d="M6 7v5M10 7v5"/></svg>
+      </button>
+    </div>
   </div>
 
   <div
     v-else-if="role === 'user'"
-    class="flex justify-end rp-animate-enter"
+    class="group relative flex justify-end rp-animate-enter"
   >
     <div class="max-w-[85%] rounded-2xl rounded-br-md bg-white/[0.04] px-4 py-3">
       <p class="whitespace-pre-wrap text-[15px] leading-7 text-white/88">{{ content }}</p>
+    </div>
+    <div v-if="messageId" class="absolute -top-1 left-0 flex gap-1 opacity-0 transition group-hover:opacity-100">
+      <button
+        type="button"
+        class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-rose-300/70"
+        title="Delete"
+        @click="$emit('delete', messageId)"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5.3 4V2.7a.7.7 0 0 1 .7-.7h4a.7.7 0 0 1 .7.7V4m2 0v9.3a.7.7 0 0 1-.7.7H4a.7.7 0 0 1-.7-.7V4"/><path d="M6 7v5M10 7v5"/></svg>
+      </button>
     </div>
   </div>
 
@@ -60,32 +88,32 @@ import { computed, ref } from 'vue';
 import { getApiBaseUrl } from '../lib/config';
 import { renderMarkdown } from '../lib/markdown';
 
-interface Props {
+const props = defineProps<{
   role: 'user' | 'assistant' | 'system';
   content: string;
   reasoning?: string;
   characterName?: string;
   characterAvatarPath?: string | null;
-}
+  messageId?: string;
+}>();
 
-const props = defineProps<Props>();
+defineEmits<{
+  delete: [messageId: string];
+  retry: [messageId: string];
+}>();
 
 const reasoningOpen = ref(false);
 
 const hasReasoning = computed(() => Boolean(props.reasoning?.trim()));
-
 const displayName = computed(() => props.characterName || 'Assistant');
-
 const avatarInitial = computed(() => {
   const name = props.characterName || 'A';
   return name.charAt(0).toUpperCase();
 });
-
 const avatarUrl = computed(() => {
   if (!props.characterAvatarPath) return null;
   return `${getApiBaseUrl()}/media/avatars/${props.characterAvatarPath.split(/[/\\]/).pop()}`;
 });
-
 const avatarStyle = computed(() => {
   const name = props.characterName || 'Assistant';
   let hash = 0;
@@ -100,7 +128,6 @@ const avatarStyle = computed(() => {
     color: `hsl(${hue}, ${sat + 10}%, ${lit + 40}%)`,
   };
 });
-
 const renderedContent = computed(() => {
   if (!props.content) return '';
   return renderMarkdown(props.content);

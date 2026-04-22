@@ -325,6 +325,58 @@ export const useChatStore = defineStore('chat', {
     cancelGeneration() {
       this.abortController?.abort();
     },
+    async deleteMessage(messageId: string) {
+      const chatId = this.activeChatId;
+
+      if (!chatId) {
+        return;
+      }
+
+      await api.deleteMessage(messageId);
+      this.messagesByChatId[chatId] = (this.messagesByChatId[chatId] ?? []).filter((message) => message.id !== messageId);
+    },
+    async renameChat(chatId: string, title: string) {
+      const chat = await api.updateChat(chatId, { title });
+      this.chats = this.chats.map((c) => (c.id === chat.id ? chat : c));
+    },
+    async retryGeneration() {
+      const chat = this.activeChat;
+
+      if (!chat || this.generating) {
+        return;
+      }
+
+      this.error = '';
+      this.generating = true;
+
+      const controller = new AbortController();
+      this.abortController = controller;
+
+      try {
+        await api.retryChat(
+          chat.id,
+          {
+            maxOutputTokens: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.maxOutputTokens ?? undefined) : this.activePreset?.maxOutputTokens,
+            providerConfigId: chat.providerConfigId ?? this.defaultProvider?.id,
+            temperature: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.temperature ?? undefined) : this.activePreset?.temperature,
+          },
+          (event) => this.appendStreamEvent(chat.id, event),
+          controller.signal,
+        );
+
+        await this.refreshAfterGeneration(chat.id);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        } else {
+          this.error = error instanceof Error ? error.message : 'Failed to retry generation';
+          await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        }
+      } finally {
+        this.generating = false;
+        this.abortController = null;
+      }
+    },
     async updateCharacter(characterId: string, input: UpdateCharacterInput) {
       const character = await api.updateCharacter(characterId, input);
 
