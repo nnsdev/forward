@@ -1,0 +1,22 @@
+{
+  "name": "@forward/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/server.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@forward/db": "workspace:*",
+    "@forward/provider-core": "workspace:*",
+    "@forward/shared": "workspace:*",
+    "@hono/node-server": "^1.14.1",
+    "dotenv": "^16.4.7",
+    "hono": "^4.7.7",
+    "zod": "^3.24.2"
+  }
+}

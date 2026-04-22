@@ -1,0 +1,318 @@
+import type {
+  Character,
+  Chat,
+  CreateCharacterInput,
+  CreatePresetInput,
+  Message,
+  NormalizedStreamEvent,
+  Preset,
+  ProviderConfig,
+  UpdateCharacterInput,
+  UpdatePresetInput,
+} from '@forward/shared';
+import { defineStore } from 'pinia';
+
+import { api } from '../lib/api';
+
+function makeTempId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+export const useChatStore = defineStore('chat', {
+  state: () => ({
+    activeChatId: null as string | null,
+    characters: [] as Character[],
+    chats: [] as Chat[],
+    error: '' as string,
+    generating: false,
+    initialized: false,
+    loading: false,
+    messagesByChatId: {} as Record<string, Message[]>,
+    presets: [] as Preset[],
+    providers: [] as ProviderConfig[],
+  }),
+  getters: {
+    activeChat(state): Chat | null {
+      return state.chats.find((chat) => chat.id === state.activeChatId) ?? null;
+    },
+    activeCharacter(state): Character | null {
+      const activeChat = state.chats.find((chat) => chat.id === state.activeChatId);
+
+      if (!activeChat?.characterId) {
+        return null;
+      }
+
+      return state.characters.find((character) => character.id === activeChat.characterId) ?? null;
+    },
+    activeMessages(state): Message[] {
+      if (!state.activeChatId) {
+        return [];
+      }
+
+      return state.messagesByChatId[state.activeChatId] ?? [];
+    },
+    activePreset(state): Preset | null {
+      const activeChat = state.chats.find((chat) => chat.id === state.activeChatId);
+
+      if (!activeChat?.presetId) {
+        return state.presets[0] ?? null;
+      }
+
+      return state.presets.find((preset) => preset.id === activeChat.presetId) ?? null;
+    },
+    defaultProvider(state): ProviderConfig | null {
+      return state.providers[0] ?? null;
+    },
+  },
+  actions: {
+    appendStreamEvent(chatId: string, event: NormalizedStreamEvent) {
+      const currentMessages = [...(this.messagesByChatId[chatId] ?? [])];
+      const lastMessage = currentMessages.at(-1);
+
+      if (event.type === 'response.started') {
+        const userIndex = currentMessages.findIndex((message) => message.id.startsWith('temp-user-'));
+
+        if (userIndex !== -1) {
+          currentMessages[userIndex] = {
+            ...currentMessages[userIndex],
+            state: 'completed',
+          };
+        }
+
+        currentMessages.push({
+          chatId,
+          content: '',
+          createdAt: new Date().toISOString(),
+          id: event.messageId,
+          reasoningContent: '',
+          role: 'assistant',
+          state: 'streaming',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      if (event.type === 'reasoning.delta' && lastMessage) {
+        currentMessages[currentMessages.length - 1] = {
+          ...lastMessage,
+          reasoningContent: `${lastMessage.reasoningContent}${event.text}`,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      if (event.type === 'content.delta' && lastMessage) {
+        currentMessages[currentMessages.length - 1] = {
+          ...lastMessage,
+          content: `${lastMessage.content}${event.text}`,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      if (event.type === 'response.completed' && lastMessage) {
+        currentMessages[currentMessages.length - 1] = {
+          ...lastMessage,
+          state: 'completed',
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      if (event.type === 'response.error' && lastMessage) {
+        currentMessages[currentMessages.length - 1] = {
+          ...lastMessage,
+          state: 'failed',
+          updatedAt: new Date().toISOString(),
+        };
+        this.error = event.error ?? 'Generation failed';
+      }
+
+      this.messagesByChatId[chatId] = currentMessages;
+    },
+    async assignCharacterToActiveChat(characterId: string | null) {
+      if (!this.activeChat) {
+        return;
+      }
+
+      const updatedChat = await api.updateChat(this.activeChat.id, {
+        characterId,
+      });
+
+      this.chats = this.chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat));
+      this.activeChatId = updatedChat.id;
+    },
+    async assignPresetToActiveChat(presetId: string | null) {
+      if (!this.activeChat) {
+        return;
+      }
+
+      const updatedChat = await api.updateChat(this.activeChat.id, {
+        presetId,
+      });
+
+      this.chats = this.chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat));
+      this.activeChatId = updatedChat.id;
+    },
+    async createCharacter(input: CreateCharacterInput) {
+      const character = await api.createCharacter(input);
+
+      this.characters = [...this.characters, character].sort((left, right) => left.name.localeCompare(right.name));
+
+      return character;
+    },
+    async createPreset(input: CreatePresetInput) {
+      const preset = await api.createPreset(input);
+
+      this.presets = [...this.presets, preset].sort((left, right) => left.name.localeCompare(right.name));
+
+      return preset;
+    },
+    async deleteCharacter(characterId: string) {
+      await api.deleteCharacter(characterId);
+
+      this.characters = this.characters.filter((character) => character.id !== characterId);
+
+      if (this.activeChat?.characterId === characterId) {
+        await this.assignCharacterToActiveChat(null);
+      }
+    },
+    async deletePreset(presetId: string) {
+      await api.deletePreset(presetId);
+
+      this.presets = this.presets.filter((preset) => preset.id !== presetId);
+
+      if (this.activeChat?.presetId === presetId) {
+        await this.assignPresetToActiveChat(this.presets[0]?.id ?? null);
+      }
+    },
+    async ensureChat(): Promise<Chat> {
+      if (this.activeChat) {
+        return this.activeChat;
+      }
+
+      const provider = this.defaultProvider;
+      const preset = this.activePreset ?? this.presets[0] ?? null;
+      const chat = await api.createChat({
+        presetId: preset?.id,
+        providerConfigId: provider?.id,
+        title: `Chat ${this.chats.length + 1}`,
+      });
+
+      this.chats = [chat, ...this.chats];
+      this.activeChatId = chat.id;
+      this.messagesByChatId[chat.id] = [];
+
+      return chat;
+    },
+    async initialize() {
+      if (this.initialized) {
+        return;
+      }
+
+      this.loading = true;
+      this.error = '';
+
+      try {
+        const [providers, chats, characters, presets] = await Promise.all([
+          api.listProviders(),
+          api.listChats(),
+          api.listCharacters(),
+          api.listPresets(),
+        ]);
+
+        this.characters = characters;
+        this.providers = providers;
+        this.presets = presets;
+        this.chats = chats;
+        this.activeChatId = chats[0]?.id ?? null;
+
+        if (this.activeChatId) {
+          await this.loadMessages(this.activeChatId);
+        }
+
+        this.initialized = true;
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Failed to initialize chat state';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async importCharacter(file: File) {
+      const character = await api.importCharacter(file);
+
+      this.characters = [...this.characters, character].sort((left, right) => left.name.localeCompare(right.name));
+
+      return character;
+    },
+    async loadMessages(chatId: string) {
+      this.messagesByChatId[chatId] = await api.listMessages(chatId);
+    },
+    async refreshAfterGeneration(chatId: string) {
+      this.messagesByChatId[chatId] = await api.listMessages(chatId);
+      this.chats = await api.listChats();
+    },
+    async selectChat(chatId: string) {
+      this.activeChatId = chatId;
+
+      if (!this.messagesByChatId[chatId]) {
+        await this.loadMessages(chatId);
+      }
+    },
+    async sendMessage(content: string) {
+      const trimmed = content.trim();
+
+      if (!trimmed || this.generating) {
+        return;
+      }
+
+      const chat = await this.ensureChat();
+      const tempUserMessage: Message = {
+        chatId: chat.id,
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+        id: makeTempId('temp-user'),
+        reasoningContent: '',
+        role: 'user',
+        state: 'pending',
+        updatedAt: new Date().toISOString(),
+      };
+
+      this.error = '';
+      this.generating = true;
+      this.messagesByChatId[chat.id] = [...(this.messagesByChatId[chat.id] ?? []), tempUserMessage];
+
+      try {
+        await api.generate(
+          chat.id,
+          {
+            content: trimmed,
+            maxOutputTokens: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.maxOutputTokens ?? undefined) : this.activePreset?.maxOutputTokens,
+            providerConfigId: chat.providerConfigId ?? this.defaultProvider?.id,
+            temperature: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.temperature ?? undefined) : this.activePreset?.temperature,
+          },
+          (event) => this.appendStreamEvent(chat.id, event),
+        );
+
+        await this.refreshAfterGeneration(chat.id);
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Failed to generate response';
+        await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+      } finally {
+        this.generating = false;
+      }
+    },
+    async updateCharacter(characterId: string, input: UpdateCharacterInput) {
+      const character = await api.updateCharacter(characterId, input);
+
+      this.characters = this.characters
+        .map((existingCharacter) => (existingCharacter.id === character.id ? character : existingCharacter))
+        .sort((left, right) => left.name.localeCompare(right.name));
+
+      return character;
+    },
+    async updatePreset(presetId: string, input: UpdatePresetInput) {
+      const preset = await api.updatePreset(presetId, input);
+
+      this.presets = this.presets.map((existingPreset) => (existingPreset.id === preset.id ? preset : existingPreset)).sort((left, right) => left.name.localeCompare(right.name));
+
+      return preset;
+    },
+  },
+});

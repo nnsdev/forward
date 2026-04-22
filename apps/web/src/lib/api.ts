@@ -1,0 +1,184 @@
+import type {
+  Character,
+  Chat,
+  CreateCharacterInput,
+  CreateChatInput,
+  CreatePresetInput,
+  CreateMessageInput,
+  Message,
+  NormalizedStreamEvent,
+  Preset,
+  PromptPreview,
+  ProviderConfig,
+  ProviderListResponse,
+  ProviderModelsResponse,
+  SessionResponse,
+  UpdateCharacterInput,
+  UpdateChatInput,
+  UpdatePresetInput,
+} from '@forward/shared';
+
+import { getApiBaseUrl } from './config';
+import { readSseStream } from './sse';
+
+interface GenerateChatInput {
+  content: string;
+  maxOutputTokens?: number;
+  providerConfigId?: string;
+  temperature?: number;
+}
+
+async function request(path: string, init?: RequestInit): Promise<Response> {
+  const isFormData = init?.body instanceof FormData;
+
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    credentials: 'include',
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  return response;
+}
+
+async function expectJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await request(path, init);
+
+  if (!response.ok) {
+    throw new Error(`request to ${path} failed with ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+export const api = {
+  async createCharacter(input: CreateCharacterInput): Promise<Character> {
+    return expectJson<Character>('/characters', {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
+  async createPreset(input: CreatePresetInput): Promise<Preset> {
+    return expectJson<Preset>('/presets', {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
+  async deleteCharacter(characterId: string): Promise<void> {
+    const response = await request(`/characters/${characterId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`failed to delete character ${characterId}`);
+    }
+  },
+  async deletePreset(presetId: string): Promise<void> {
+    const response = await request(`/presets/${presetId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`failed to delete preset ${presetId}`);
+    }
+  },
+  async createChat(input: CreateChatInput): Promise<Chat> {
+    return expectJson<Chat>('/chats', {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
+  async createMessage(chatId: string, input: CreateMessageInput): Promise<Message> {
+    return expectJson<Message>(`/chats/${chatId}/messages`, {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
+  async generate(chatId: string, input: GenerateChatInput, onEvent: (event: NormalizedStreamEvent) => void): Promise<void> {
+    const response = await request(`/chats/${chatId}/generate`, {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+
+    await readSseStream(response, onEvent);
+  },
+  async getPromptPreview(chatId: string): Promise<PromptPreview> {
+    return expectJson<PromptPreview>(`/chats/${chatId}/prompt-preview`);
+  },
+  async getSession(): Promise<SessionResponse> {
+    return expectJson<SessionResponse>('/auth/session');
+  },
+  async importCharacter(file: File): Promise<Character> {
+    const formData = new FormData();
+
+    formData.append('file', file);
+
+    return expectJson<Character>('/characters/import', {
+      body: formData,
+      method: 'POST',
+    });
+  },
+  async listCharacters(): Promise<Character[]> {
+    return expectJson<Character[]>('/characters');
+  },
+  async listChats(): Promise<Chat[]> {
+    return expectJson<Chat[]>('/chats');
+  },
+  async listMessages(chatId: string): Promise<Message[]> {
+    return expectJson<Message[]>(`/chats/${chatId}/messages`);
+  },
+  async listPresets(): Promise<Preset[]> {
+    return expectJson<Preset[]>('/presets');
+  },
+  async listProviderModels(providerId: string): Promise<ProviderModelsResponse> {
+    return expectJson<ProviderModelsResponse>(`/providers/${providerId}/models`);
+  },
+  async listProviders(): Promise<ProviderConfig[]> {
+    const response = await expectJson<ProviderListResponse>('/providers');
+
+    return response.providers;
+  },
+  async login(password: string): Promise<void> {
+    const response = await request('/auth/login', {
+      body: JSON.stringify({ password }),
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Invalid password');
+      }
+
+      throw new Error(`Login failed (${response.status})`);
+    }
+  },
+  async logout(): Promise<void> {
+    const response = await request('/auth/logout', {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error('Logout failed');
+    }
+  },
+  async updateChat(chatId: string, input: UpdateChatInput): Promise<Chat> {
+    return expectJson<Chat>(`/chats/${chatId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+  async updateCharacter(characterId: string, input: UpdateCharacterInput): Promise<Character> {
+    return expectJson<Character>(`/characters/${characterId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+  async updatePreset(presetId: string, input: UpdatePresetInput): Promise<Preset> {
+    return expectJson<Preset>(`/presets/${presetId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+};

@@ -1,0 +1,22 @@
+{
+  "name": "forward",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @forward/api --filter @forward/web dev",
+    "dev:api": "pnpm --filter @forward/api dev",
+    "dev:web": "pnpm --filter @forward/web dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:live": "FORWARD_RUN_LIVE_TESTS=1 pnpm --filter @forward/provider-core test:live",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
+  }
+}
