@@ -3,12 +3,14 @@ import type {
   Chat,
   CreateCharacterInput,
   CreatePresetInput,
+  CreateProviderConfigInput,
   Message,
   NormalizedStreamEvent,
   Preset,
   ProviderConfig,
   UpdateCharacterInput,
   UpdatePresetInput,
+  UpdateProviderConfigInput,
 } from '@forward/shared';
 import { defineStore } from 'pinia';
 
@@ -65,6 +67,8 @@ export const useChatStore = defineStore('chat', {
     },
   },
   actions: {
+    abortController: null as AbortController | null,
+
     appendStreamEvent(chatId: string, event: NormalizedStreamEvent) {
       const currentMessages = [...(this.messagesByChatId[chatId] ?? [])];
       const lastMessage = currentMessages.at(-1);
@@ -182,6 +186,16 @@ export const useChatStore = defineStore('chat', {
         await this.assignPresetToActiveChat(this.presets[0]?.id ?? null);
       }
     },
+    async deleteChat(chatId: string) {
+      await api.deleteChat(chatId);
+
+      this.chats = this.chats.filter((chat) => chat.id !== chatId);
+      delete this.messagesByChatId[chatId];
+
+      if (this.activeChatId === chatId) {
+        this.activeChatId = this.chats[0]?.id ?? null;
+      }
+    },
     async ensureChat(): Promise<Chat> {
       if (this.activeChat) {
         return this.activeChat;
@@ -276,6 +290,10 @@ export const useChatStore = defineStore('chat', {
 
       this.error = '';
       this.generating = true;
+
+      const controller = new AbortController();
+      this.abortController = controller;
+
       this.messagesByChatId[chat.id] = [...(this.messagesByChatId[chat.id] ?? []), tempUserMessage];
 
       try {
@@ -288,15 +306,24 @@ export const useChatStore = defineStore('chat', {
             temperature: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.temperature ?? undefined) : this.activePreset?.temperature,
           },
           (event) => this.appendStreamEvent(chat.id, event),
+          controller.signal,
         );
 
         await this.refreshAfterGeneration(chat.id);
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Failed to generate response';
-        await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        if (controller.signal.aborted) {
+          await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        } else {
+          this.error = error instanceof Error ? error.message : 'Failed to generate response';
+          await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        }
       } finally {
         this.generating = false;
+        this.abortController = null;
       }
+    },
+    cancelGeneration() {
+      this.abortController?.abort();
     },
     async updateCharacter(characterId: string, input: UpdateCharacterInput) {
       const character = await api.updateCharacter(characterId, input);
@@ -313,6 +340,37 @@ export const useChatStore = defineStore('chat', {
       this.presets = this.presets.map((existingPreset) => (existingPreset.id === preset.id ? preset : existingPreset)).sort((left, right) => left.name.localeCompare(right.name));
 
       return preset;
+    },
+    async createProviderConfig(input: CreateProviderConfigInput) {
+      const providerConfig = await api.createProviderConfig(input);
+
+      this.providers = [...this.providers, providerConfig].sort((left, right) => left.name.localeCompare(right.name));
+
+      return providerConfig;
+    },
+    async updateProviderConfig(providerId: string, input: UpdateProviderConfigInput) {
+      const providerConfig = await api.updateProviderConfig(providerId, input);
+
+      this.providers = this.providers.map((existingProvider) => (existingProvider.id === providerConfig.id ? providerConfig : existingProvider)).sort((left, right) => left.name.localeCompare(right.name));
+
+      return providerConfig;
+    },
+    async deleteProviderConfig(providerId: string) {
+      await api.deleteProviderConfig(providerId);
+
+      this.providers = this.providers.filter((existingProvider) => existingProvider.id !== providerId);
+    },
+    async assignProviderConfigToActiveChat(providerConfigId: string | null) {
+      if (!this.activeChat) {
+        return;
+      }
+
+      const updatedChat = await api.updateChat(this.activeChat.id, {
+        providerConfigId,
+      });
+
+      this.chats = this.chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat));
+      this.activeChatId = updatedChat.id;
     },
   },
 });

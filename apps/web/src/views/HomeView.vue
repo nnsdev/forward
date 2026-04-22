@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-dvh bg-[var(--rp-bg)]">
+  <div class="flex h-dvh bg-[var(--rp-bg)]" @touchstart.passive="scrollContainer?.focus()">
     <aside
       :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       class="fixed inset-y-0 left-0 z-30 w-60 flex-col border-r border-white/5 bg-[var(--rp-bg)] transition-transform duration-200 lg:relative lg:z-auto lg:flex"
@@ -22,11 +22,20 @@
         <button
           v-for="chat in chatStore.chats"
           :key="chat.id"
-          class="mb-0.5 w-full rounded-lg px-3 py-2 text-left text-sm transition"
+          class="group mb-0.5 w-full rounded-lg px-3 py-2 text-left text-sm transition"
           :class="chat.id === chatStore.activeChatId ? 'bg-white/[0.06] text-white' : 'text-white/45 hover:bg-white/[0.03] hover:text-white/75'"
           @click="chatStore.selectChat(chat.id)"
         >
-          <p class="truncate font-medium">{{ chat.title }}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="truncate font-medium flex-1">{{ chat.title }}</p>
+            <button
+              class="hidden shrink-0 text-[10px] text-white/20 group-hover:inline hover:text-white/50"
+              type="button"
+              @click.stop="confirmDeleteChat(chat.id)"
+            >
+              &times;
+            </button>
+          </div>
         </button>
         <div v-if="!chatStore.chats.length" class="px-3 py-8 text-center text-xs text-white/20">
           No conversations yet
@@ -34,6 +43,18 @@
       </div>
 
       <div class="border-t border-white/5 p-2.5 space-y-0.5">
+        <button
+          class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
+          @click="providerPanelOpen = !providerPanelOpen"
+        >
+          Providers
+        </button>
+        <button
+          class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
+          @click="presetPanelOpen = !presetPanelOpen"
+        >
+          Presets
+        </button>
         <RouterLink
           class="block w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
           to="/prompt"
@@ -57,6 +78,13 @@
 
         <div v-if="chatStore.activeCharacter" class="flex items-center gap-2.5">
           <div
+            v-if="characterAvatarUrl"
+            class="h-7 w-7 shrink-0 overflow-hidden rounded-full"
+          >
+            <img :src="characterAvatarUrl" alt="" class="h-full w-full object-cover" />
+          </div>
+          <div
+            v-else
             class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
             :style="characterAvatarStyle"
           >
@@ -72,25 +100,17 @@
           <p class="text-sm text-white/40">No character</p>
         </div>
 
-        <div class="ml-auto">
+        <div class="ml-auto flex items-center gap-1">
           <button
-            v-if="chatStore.activeCharacter"
             class="rounded-lg px-3 py-1.5 text-[11px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/55"
             @click="characterPanelOpen = !characterPanelOpen"
           >
             {{ characterPanelOpen ? 'Hide' : 'Character' }}
           </button>
-          <button
-            v-else
-            class="rounded-lg px-3 py-1.5 text-[11px] text-[var(--rp-accent)]/60 transition hover:bg-white/[0.04] hover:text-[var(--rp-accent)]"
-            @click="characterPanelOpen = !characterPanelOpen"
-          >
-            + Character
-          </button>
         </div>
       </header>
 
-      <div class="rp-scrollbar relative flex-1 overflow-y-auto">
+      <div ref="scrollContainer" class="rp-scrollbar relative flex-1 overflow-y-auto">
         <div v-if="chatStore.loading" class="flex h-full items-center justify-center text-sm text-white/25">
           Loading...
         </div>
@@ -108,7 +128,14 @@
 
         <div v-else-if="!chatStore.activeMessages.length" class="flex h-full flex-col items-center justify-center px-8">
           <div v-if="chatStore.activeCharacter" class="flex max-w-xl flex-col items-center gap-3 text-center">
+            <img
+              v-if="characterAvatarUrl"
+              :src="characterAvatarUrl"
+              alt=""
+              class="h-20 w-20 rounded-full object-cover"
+            />
             <div
+              v-else
               class="flex h-20 w-20 items-center justify-center rounded-full text-2xl font-semibold"
               :style="characterAvatarStyle"
             >
@@ -138,6 +165,13 @@
           <div v-if="chatStore.generating" class="mt-4 flex items-center gap-2 text-xs text-white/20">
             <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--rp-accent)]"></span>
             Writing...
+            <button
+              class="ml-1 rounded border border-white/10 px-2 py-0.5 text-[10px] text-white/30 transition hover:border-white/20 hover:text-white/50"
+              type="button"
+              @click="chatStore.cancelGeneration()"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       </div>
@@ -155,8 +189,17 @@
             @keydown.enter.exact.prevent="submitMessage"
           />
           <button
+            v-if="chatStore.generating"
+            class="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-rose-400/30 text-rose-300/70 transition hover:border-rose-400/50 hover:text-rose-300"
+            type="button"
+            @click="chatStore.cancelGeneration()"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect width="14" height="14" rx="2" fill="currentColor"/></svg>
+          </button>
+          <button
+            v-else
             class="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--rp-accent)] text-[#0a1212] transition hover:brightness-110 disabled:opacity-35"
-            :disabled="chatStore.generating || !composer.trim()"
+            :disabled="!composer.trim()"
             type="submit"
           >
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M2 9l14-7-7 14v-7H2z" fill="currentColor"/></svg>
@@ -170,8 +213,9 @@
       class="rp-animate-fade w-64 shrink-0 overflow-hidden border-l border-white/5 bg-[var(--rp-bg)] lg:w-72"
     >
       <div class="rp-scrollbar flex h-full flex-col overflow-y-auto">
-        <div class="border-b border-white/5 p-4">
+        <div class="flex h-12 items-center justify-between border-b border-white/5 px-4">
           <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/25">Characters</p>
+          <button class="text-white/25 hover:text-white/50" type="button" @click="characterPanelOpen = false">&times;</button>
         </div>
 
         <div class="p-4 space-y-3">
@@ -183,8 +227,28 @@
             />
             <textarea
               v-model="characterForm.description"
-              class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Description or role instructions"
+              class="min-h-16 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Description"
+            />
+            <textarea
+              v-model="characterForm.personality"
+              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Personality traits"
+            />
+            <textarea
+              v-model="characterForm.scenario"
+              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Scenario / setting"
+            />
+            <textarea
+              v-model="characterForm.firstMessage"
+              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="First message (greeting)"
+            />
+            <textarea
+              v-model="characterForm.exampleDialogue"
+              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Example dialogue"
             />
             <div class="flex gap-2">
               <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
@@ -212,7 +276,22 @@
               :key="character.id"
               class="rounded-lg px-3 py-2.5 text-left transition hover:bg-white/[0.03]"
             >
-              <p class="text-sm font-medium text-white/75">{{ character.name }}</p>
+              <div class="flex items-center gap-2">
+                <img
+                  v-if="character.avatarAssetPath"
+                  :src="avatarUrlFor(character.avatarAssetPath)"
+                  alt=""
+                  class="h-6 w-6 shrink-0 rounded-full object-cover"
+                />
+                <div
+                  v-else
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  :style="avatarStyleForName(character.name)"
+                >
+                  {{ character.name.charAt(0).toUpperCase() }}
+                </div>
+                <p class="truncate text-sm font-medium text-white/75">{{ character.name }}</p>
+              </div>
               <p class="mt-0.5 line-clamp-2 text-xs text-white/25">{{ character.description || character.personality || 'No details.' }}</p>
               <div class="mt-2 flex gap-1.5">
                 <button
@@ -242,6 +321,227 @@
         </div>
       </div>
     </aside>
+
+    <aside
+      v-if="presetPanelOpen"
+      class="rp-animate-fade w-64 shrink-0 overflow-hidden border-l border-white/5 bg-[var(--rp-bg)] lg:w-72"
+    >
+      <div class="rp-scrollbar flex h-full flex-col overflow-y-auto">
+        <div class="flex h-12 items-center justify-between border-b border-white/5 px-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/25">Presets</p>
+          <button class="text-white/25 hover:text-white/50" type="button" @click="presetPanelOpen = false">&times;</button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <form class="space-y-2" @submit.prevent="savePreset">
+            <input
+              v-model="presetForm.name"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Preset name"
+            />
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Temperature</label>
+                <input
+                  v-model.number="presetForm.temperature"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  max="2"
+                  min="0"
+                  step="0.1"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Max tokens</label>
+                <input
+                  v-model.number="presetForm.maxOutputTokens"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  min="1"
+                  step="1"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Top P</label>
+                <input
+                  v-model.number="presetForm.topP"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  max="1"
+                  min="0"
+                  step="0.05"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Top K</label>
+                <input
+                  v-model.number="presetForm.topK"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  min="0"
+                  step="1"
+                  type="number"
+                />
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
+                {{ editingPresetId ? 'Save' : 'Create' }}
+              </button>
+              <button
+                v-if="editingPresetId"
+                class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/35 transition hover:text-white/60"
+                type="button"
+                @click="resetPresetForm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+
+          <div class="space-y-1">
+            <div
+              v-for="preset in chatStore.presets"
+              :key="preset.id"
+              class="rounded-lg px-3 py-2.5 text-left transition hover:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-white/75">{{ preset.name }}</p>
+                <div class="flex gap-1.5">
+                  <button
+                    class="rounded px-2 py-0.5 text-[11px] transition hover:text-white/60"
+                    :class="chatStore.activePreset?.id === preset.id ? 'text-[var(--rp-accent)]' : 'text-white/30'"
+                    type="button"
+                    @click="assignPreset(preset.id)"
+                  >
+                    {{ chatStore.activePreset?.id === preset.id ? 'Active' : 'Use' }}
+                  </button>
+                  <button class="rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50" type="button" @click="editPreset(preset.id)">
+                    Edit
+                  </button>
+                  <button class="rounded px-2 py-0.5 text-[11px] text-rose-300/40 transition hover:text-rose-300/80" type="button" @click="removePreset(preset.id)">
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p class="mt-0.5 text-[11px] text-white/25">
+                temp {{ preset.temperature }} &middot; max {{ preset.maxOutputTokens }} &middot; top_p {{ preset.topP }} &middot; top_k {{ preset.topK }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <aside
+      v-if="providerPanelOpen"
+      class="rp-animate-fade w-64 shrink-0 overflow-hidden border-l border-white/5 bg-[var(--rp-bg)] lg:w-72"
+    >
+      <div class="rp-scrollbar flex h-full flex-col overflow-y-auto">
+        <div class="flex h-12 items-center justify-between border-b border-white/5 px-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/25">Providers</p>
+          <button class="text-white/25 hover:text-white/50" type="button" @click="providerPanelOpen = false">&times;</button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <form class="space-y-2" @submit.prevent="saveProvider">
+            <input
+              v-model="providerForm.name"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Provider name"
+            />
+            <select
+              v-model="providerForm.providerType"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            >
+              <option value="openai-compatible">OpenAI-compatible</option>
+            </select>
+            <input
+              v-model="providerForm.baseUrl"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Base URL (e.g. http://localhost:8082)"
+              type="url"
+            />
+            <input
+              v-model="providerForm.model"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Model name"
+            />
+            <input
+              v-model="providerForm.apiKeyEnvVar"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="API key env var (optional)"
+            />
+            <label class="flex items-center gap-2 text-sm text-white/50">
+              <input v-model="providerForm.reasoningEnabled" type="checkbox" class="accent-[var(--rp-accent)]" />
+              Reasoning support
+            </label>
+            <div class="flex gap-2">
+              <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
+                {{ editingProviderId ? 'Save' : 'Create' }}
+              </button>
+              <button
+                v-if="editingProviderId"
+                class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/35 transition hover:text-white/60"
+                type="button"
+                @click="resetProviderForm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+
+          <div class="space-y-1">
+            <div
+              v-for="provider in chatStore.providers"
+              :key="provider.id"
+              class="rounded-lg px-3 py-2.5 text-left transition hover:bg-white/[0.03]"
+            >
+              <p class="text-sm font-medium text-white/75">{{ provider.name }}</p>
+              <p class="mt-0.5 text-[11px] text-white/25">{{ provider.model }} &middot; {{ provider.providerType }}</p>
+              <div class="mt-2 flex gap-1.5">
+                <button
+                  class="rounded px-2 py-0.5 text-[11px] transition hover:text-white/60"
+                  :class="chatStore.activeChat?.providerConfigId === provider.id ? 'text-[var(--rp-accent)]' : 'text-white/30'"
+                  type="button"
+                  @click="assignProvider(provider.id)"
+                >
+                  {{ chatStore.activeChat?.providerConfigId === provider.id ? 'Active' : 'Use' }}
+                </button>
+                <button class="rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50" type="button" @click="editProvider(provider.id)">
+                  Edit
+                </button>
+                <button class="rounded px-2 py-0.5 text-[11px] text-rose-300/40 transition hover:text-rose-300/80" type="button" @click="removeProvider(provider.id)">
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div v-if="deleteTargetChatId" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="deleteTargetChatId = null">
+    <div class="w-80 rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
+      <p class="text-sm font-medium text-white/85">Delete conversation?</p>
+      <p class="mt-2 text-xs text-white/40">This will permanently remove the chat and all its messages.</p>
+      <div class="mt-4 flex gap-2">
+        <button
+          class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+          type="button"
+          @click="deleteTargetChatId = null"
+        >
+          Cancel
+        </button>
+        <button
+          class="flex-1 rounded-lg bg-rose-500/15 px-3 py-2 text-sm text-rose-300 transition hover:bg-rose-500/25"
+          type="button"
+          @click="deleteChat"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
   </div>
 
   <p v-if="chatStore.error" class="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-lg bg-rose-500/10 px-4 py-2 text-sm text-rose-300/80 rp-animate-fade">
@@ -250,10 +550,11 @@
 </template>
 
 <script setup lang="ts">
-import type { CreateCharacterInput, CreatePresetInput } from '@forward/shared';
-import { reactive, onMounted, ref, computed } from 'vue';
+import type { CreateCharacterInput, CreatePresetInput, CreateProviderConfigInput } from '@forward/shared';
+import { reactive, onMounted, ref, computed, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { getApiBaseUrl } from '../lib/config';
 import MessageCard from '../components/MessageCard.vue';
 import { useChatStore } from '../stores/chat';
 import { useSessionStore } from '../stores/session';
@@ -262,7 +563,13 @@ const chatStore = useChatStore();
 const characterPanelOpen = ref(false);
 const composer = ref('');
 const composerRef = ref<HTMLTextAreaElement | null>(null);
+const deleteTargetChatId = ref<string | null>(null);
 const editingCharacterId = ref<string | null>(null);
+const editingPresetId = ref<string | null>(null);
+const editingProviderId = ref<string | null>(null);
+const presetPanelOpen = ref(false);
+const providerPanelOpen = ref(false);
+const scrollContainer = ref<HTMLElement | null>(null);
 const sidebarOpen = ref(false);
 const characterForm = reactive<CreateCharacterInput>({
   avatarAssetPath: null,
@@ -273,11 +580,27 @@ const characterForm = reactive<CreateCharacterInput>({
   personality: '',
   scenario: '',
 });
+const presetForm = reactive<CreatePresetInput>({
+  maxOutputTokens: 256,
+  name: '',
+  stopStrings: [],
+  temperature: 0.7,
+  topK: 40,
+  topP: 0.9,
+});
+const providerForm = reactive<CreateProviderConfigInput>({
+  apiKeyEnvVar: null,
+  baseUrl: '',
+  model: '',
+  name: '',
+  providerType: 'openai-compatible',
+  reasoningEnabled: false,
+});
 const router = useRouter();
 const sessionStore = useSessionStore();
+let firstMessageSent = false;
 
-const characterAvatarStyle = computed(() => {
-  const name = chatStore.activeCharacter?.name || 'A';
+function avatarStyleForName(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -289,11 +612,66 @@ const characterAvatarStyle = computed(() => {
     background: `hsl(${hue}, ${sat}%, ${lit}%)`,
     color: `hsl(${hue}, ${sat + 15}%, ${lit + 42}%)`,
   };
+}
+
+function avatarUrlFor(path: string | null): string {
+  if (!path) return '';
+  return `${getApiBaseUrl()}/media/avatars/${path.split(/[/\\]/).pop()}`;
+}
+
+const characterAvatarStyle = computed(() => avatarStyleForName(chatStore.activeCharacter?.name || 'A'));
+
+const characterAvatarUrl = computed(() => {
+  if (!chatStore.activeCharacter?.avatarAssetPath) return null;
+  return avatarUrlFor(chatStore.activeCharacter.avatarAssetPath);
+});
+
+function scrollToBottom() {
+  nextTick(() => {
+    const el = scrollContainer.value;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  });
+}
+
+watch(() => chatStore.activeMessages.length, () => {
+  scrollToBottom();
+});
+
+watch(() => {
+  const msgs = chatStore.activeMessages;
+  const last = msgs[msgs.length - 1];
+  if (!last) return '';
+  return `${last.id}:${last.content?.length ?? 0}:${last.reasoningContent?.length ?? 0}:${last.state}`;
+}, () => {
+  scrollToBottom();
+});
+
+watch(() => chatStore.activeChatId, async (newId) => {
+  if (newId) {
+    await chatStore.loadMessages(newId);
+    scrollToBottom();
+  }
+  firstMessageSent = false;
+  checkFirstMessage();
 });
 
 onMounted(async () => {
   await chatStore.initialize();
+  scrollToBottom();
+  checkFirstMessage();
 });
+
+function checkFirstMessage() {
+  if (firstMessageSent) return;
+  if (!chatStore.activeChat) return;
+  if (chatStore.activeMessages.length > 0) return;
+  const character = chatStore.activeCharacter;
+  if (!character?.firstMessage) return;
+  firstMessageSent = true;
+  chatStore.sendMessage(character.firstMessage);
+}
 
 function autoResize() {
   const el = composerRef.value;
@@ -304,6 +682,16 @@ function autoResize() {
 
 async function createChat() {
   await chatStore.ensureChat();
+}
+
+function confirmDeleteChat(chatId: string) {
+  deleteTargetChatId.value = chatId;
+}
+
+async function deleteChat() {
+  if (!deleteTargetChatId.value) return;
+  await chatStore.deleteChat(deleteTargetChatId.value);
+  deleteTargetChatId.value = null;
 }
 
 function resetCharacterForm() {
@@ -351,11 +739,100 @@ async function importCharacter(event: Event) {
 async function attachCharacter(characterId: string | null) {
   await chatStore.ensureChat();
   await chatStore.assignCharacterToActiveChat(characterId);
+  checkFirstMessage();
 }
 
 async function removeCharacter(characterId: string) {
   if (editingCharacterId.value === characterId) resetCharacterForm();
   await chatStore.deleteCharacter(characterId);
+}
+
+function resetPresetForm() {
+  editingPresetId.value = null;
+  presetForm.name = '';
+  presetForm.temperature = 0.7;
+  presetForm.maxOutputTokens = 256;
+  presetForm.topP = 0.9;
+  presetForm.topK = 40;
+  presetForm.stopStrings = [];
+}
+
+function editPreset(presetId: string) {
+  const preset = chatStore.presets.find((p) => p.id === presetId);
+  if (!preset) return;
+  editingPresetId.value = preset.id;
+  presetPanelOpen.value = true;
+  presetForm.name = preset.name;
+  presetForm.temperature = preset.temperature;
+  presetForm.maxOutputTokens = preset.maxOutputTokens;
+  presetForm.topP = preset.topP;
+  presetForm.topK = preset.topK;
+  presetForm.stopStrings = [...preset.stopStrings];
+}
+
+async function savePreset() {
+  if (!presetForm.name.trim()) return;
+  const payload = { ...presetForm, name: presetForm.name.trim() };
+  if (editingPresetId.value) {
+    await chatStore.updatePreset(editingPresetId.value, payload);
+  } else {
+    await chatStore.createPreset(payload);
+  }
+  resetPresetForm();
+}
+
+async function assignPreset(presetId: string) {
+  await chatStore.ensureChat();
+  await chatStore.assignPresetToActiveChat(presetId);
+}
+
+async function removePreset(presetId: string) {
+  if (editingPresetId.value === presetId) resetPresetForm();
+  await chatStore.deletePreset(presetId);
+}
+
+function resetProviderForm() {
+  editingProviderId.value = null;
+  providerForm.name = '';
+  providerForm.providerType = 'openai-compatible';
+  providerForm.baseUrl = '';
+  providerForm.model = '';
+  providerForm.apiKeyEnvVar = null;
+  providerForm.reasoningEnabled = false;
+}
+
+function editProvider(providerId: string) {
+  const provider = chatStore.providers.find((p) => p.id === providerId);
+  if (!provider) return;
+  editingProviderId.value = provider.id;
+  providerPanelOpen.value = true;
+  providerForm.name = provider.name;
+  providerForm.providerType = provider.providerType;
+  providerForm.baseUrl = provider.baseUrl;
+  providerForm.model = provider.model;
+  providerForm.apiKeyEnvVar = provider.apiKeyEnvVar;
+  providerForm.reasoningEnabled = provider.reasoningEnabled;
+}
+
+async function saveProvider() {
+  if (!providerForm.name.trim() || !providerForm.baseUrl.trim() || !providerForm.model.trim()) return;
+  const payload = { ...providerForm, name: providerForm.name.trim(), baseUrl: providerForm.baseUrl.trim(), model: providerForm.model.trim() };
+  if (editingProviderId.value) {
+    await chatStore.updateProviderConfig(editingProviderId.value, payload);
+  } else {
+    await chatStore.createProviderConfig(payload);
+  }
+  resetProviderForm();
+}
+
+async function assignProvider(providerId: string) {
+  await chatStore.ensureChat();
+  await chatStore.assignProviderConfigToActiveChat(providerId);
+}
+
+async function removeProvider(providerId: string) {
+  if (editingProviderId.value === providerId) resetProviderForm();
+  await chatStore.deleteProviderConfig(providerId);
 }
 
 async function logout() {

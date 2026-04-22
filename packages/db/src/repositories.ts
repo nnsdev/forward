@@ -6,6 +6,7 @@ import type {
   CreateCharacterInput,
   CreateChatInput,
   CreatePresetInput,
+  CreateProviderConfigInput,
   Message,
   MessageRole,
   MessageState,
@@ -14,6 +15,7 @@ import type {
   UpdateCharacterInput,
   UpdateChatInput,
   UpdatePresetInput,
+  UpdateProviderConfigInput,
 } from '@forward/shared';
 import { CharacterSchema, ChatSchema, MessageSchema, PresetSchema, ProviderConfigSchema } from '@forward/shared';
 
@@ -21,13 +23,17 @@ import type { SqliteDatabaseClient } from './client';
 import { characters, chats, messages, presets, providerConfigs } from './schema';
 
 export interface ProviderConfigRepository {
+  create(input: CreateProviderConfigInput): Promise<ProviderConfig>;
+  delete(id: string): Promise<void>;
   getById(id: string): Promise<ProviderConfig | null>;
   list(): Promise<ProviderConfig[]>;
+  update(id: string, input: UpdateProviderConfigInput): Promise<ProviderConfig>;
   upsert(input: ProviderConfig): Promise<ProviderConfig>;
 }
 
 export interface ChatRepository {
   create(input: CreateChatInput): Promise<Chat>;
+  delete(id: string): Promise<void>;
   getById(id: string): Promise<Chat | null>;
   list(): Promise<Chat[]>;
   update(id: string, input: UpdateChatInput): Promise<Chat>;
@@ -143,6 +149,36 @@ function mapMessage(row: typeof messages.$inferSelect): Message {
 
 export function createProviderConfigRepository(client: SqliteDatabaseClient): ProviderConfigRepository {
   return {
+    async create(input) {
+      const id = crypto.randomUUID();
+      const timestamp = nowIso();
+
+      client.db
+        .insert(providerConfigs)
+        .values({
+          apiKeyEnvVar: input.apiKeyEnvVar ?? null,
+          baseUrl: input.baseUrl,
+          createdAt: timestamp,
+          id,
+          model: input.model,
+          name: input.name,
+          providerType: input.providerType,
+          reasoningEnabled: input.reasoningEnabled,
+          updatedAt: timestamp,
+        })
+        .run();
+
+      const row = client.db.select().from(providerConfigs).where(eq(providerConfigs.id, id)).get();
+
+      if (!row) {
+        throw new Error(`provider config ${id} was not persisted`);
+      }
+
+      return mapProviderConfig(row);
+    },
+    async delete(id) {
+      client.db.delete(providerConfigs).where(eq(providerConfigs.id, id)).run();
+    },
     async getById(id) {
       const row = client.db.select().from(providerConfigs).where(eq(providerConfigs.id, id)).get();
 
@@ -150,6 +186,31 @@ export function createProviderConfigRepository(client: SqliteDatabaseClient): Pr
     },
     async list() {
       return client.db.select().from(providerConfigs).orderBy(providerConfigs.name).all().map(mapProviderConfig);
+    },
+    async update(id, input) {
+      const existing = client.db.select().from(providerConfigs).where(eq(providerConfigs.id, id)).get();
+
+      if (!existing) {
+        throw new Error(`provider config ${id} was not found`);
+      }
+
+      const timestamp = nowIso();
+
+      client.db
+        .update(providerConfigs)
+        .set({
+          apiKeyEnvVar: input.apiKeyEnvVar === undefined ? existing.apiKeyEnvVar : (input.apiKeyEnvVar ?? null),
+          baseUrl: input.baseUrl ?? existing.baseUrl,
+          model: input.model ?? existing.model,
+          name: input.name ?? existing.name,
+          providerType: input.providerType ?? existing.providerType,
+          reasoningEnabled: input.reasoningEnabled ?? existing.reasoningEnabled,
+          updatedAt: timestamp,
+        })
+        .where(eq(providerConfigs.id, id))
+        .run();
+
+      return mapProviderConfig(client.db.select().from(providerConfigs).where(eq(providerConfigs.id, id)).get()!);
     },
     async upsert(input) {
       const existing = client.db.select().from(providerConfigs).where(eq(providerConfigs.id, input.id)).get();
@@ -223,6 +284,10 @@ export function createChatRepository(client: SqliteDatabaseClient): ChatReposito
       }
 
       return mapChat(row);
+    },
+    async delete(id) {
+      client.db.delete(messages).where(eq(messages.chatId, id)).run();
+      client.db.delete(chats).where(eq(chats.id, id)).run();
     },
     async getById(id) {
       const row = client.db.select().from(chats).where(eq(chats.id, id)).get();

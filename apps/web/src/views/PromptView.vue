@@ -9,7 +9,11 @@
         <RouterLink class="rounded-full border border-white/10 px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-white/64 transition hover:border-[rgba(205,155,113,0.45)] hover:text-white" to="/">Back to chat</RouterLink>
       </div>
 
-      <div v-if="loading" class="mt-6 rounded-[1.5rem] border border-white/7 bg-black/14 p-4 text-sm text-white/58">
+      <div v-if="!chatStore.activeChatId" class="mt-6 rounded-[1.5rem] border border-white/7 bg-black/14 p-6 text-center text-sm text-white/50">
+        Select a chat to inspect its prompt.
+      </div>
+
+      <div v-else-if="loading" class="mt-6 rounded-[1.5rem] border border-white/7 bg-black/14 p-4 text-sm text-white/58">
         Loading prompt preview...
       </div>
 
@@ -38,13 +42,26 @@
           <p class="mt-2 leading-6">
             {{ preview.truncation.applied ? `Applied. Dropped ${preview.truncation.droppedMessageIds.length} older message(s) to fit the prompt budget.` : 'Not applied. Full message history fit within the current prompt budget.' }}
           </p>
-          <div v-if="preview.truncation.applied" class="mt-3 rounded-2xl border border-amber-500/20 bg-slate-950/50 p-3 text-xs text-amber-100/90">
-            <p class="font-semibold text-amber-200">Dropped message IDs</p>
-            <pre class="mt-2 overflow-x-auto whitespace-pre-wrap">{{ preview.truncation.droppedMessageIds.join('\n') }}</pre>
-          </div>
         </article>
 
-        <pre class="forward-scrollbar mt-6 overflow-x-auto rounded-[1.75rem] border border-white/7 bg-black/28 p-5 text-sm leading-7 text-white/74">{{ JSON.stringify(preview.messages, null, 2) }}</pre>
+        <div class="mt-6 space-y-3">
+          <div
+            v-for="(message, index) in preview.messages"
+            :key="index"
+            class="rounded-xl border border-white/7 bg-black/12 p-4"
+          >
+            <div class="mb-1 flex items-center gap-2">
+              <span
+                class="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                :class="roleTagClass(message.role)"
+              >
+                {{ message.role }}
+              </span>
+              <span class="text-[10px] text-white/20">#{{ index + 1 }}</span>
+            </div>
+            <p class="whitespace-pre-wrap text-sm leading-6 text-white/74">{{ message.content }}</p>
+          </div>
+        </div>
       </div>
 
       <p v-if="error" class="mt-4 text-sm text-rose-300">{{ error }}</p>
@@ -54,7 +71,7 @@
 
 <script setup lang="ts">
 import type { PromptPreview } from '@forward/shared';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 
 import { api } from '../lib/api';
 import { useChatStore } from '../stores/chat';
@@ -64,23 +81,36 @@ const loading = ref(false);
 const preview = ref<PromptPreview | null>(null);
 const chatStore = useChatStore();
 
-onMounted(async () => {
+function roleTagClass(role: string): string {
+  if (role === 'system') return 'bg-teal-500/15 text-teal-300';
+  if (role === 'user') return 'bg-blue-500/15 text-blue-300';
+  return 'bg-purple-500/15 text-purple-300';
+}
+
+async function loadPreview() {
+  if (!chatStore.activeChatId) {
+    preview.value = null;
+    return;
+  }
+
   loading.value = true;
   error.value = '';
 
   try {
-    await chatStore.initialize();
-
-    if (!chatStore.activeChatId) {
-      error.value = 'Create or select a chat to inspect its prompt.';
-      return;
-    }
-
     preview.value = await api.getPromptPreview(chatStore.activeChatId);
   } catch (nextError) {
     error.value = nextError instanceof Error ? nextError.message : 'Failed to load prompt preview';
   } finally {
     loading.value = false;
   }
+}
+
+onMounted(async () => {
+  await chatStore.initialize();
+  await loadPreview();
+});
+
+watch(() => chatStore.activeChatId, () => {
+  loadPreview();
 });
 </script>

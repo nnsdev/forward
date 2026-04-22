@@ -4,6 +4,7 @@ import type {
   CreateCharacterInput,
   CreateChatInput,
   CreatePresetInput,
+  CreateProviderConfigInput,
   CreateMessageInput,
   Message,
   NormalizedStreamEvent,
@@ -16,6 +17,7 @@ import type {
   UpdateCharacterInput,
   UpdateChatInput,
   UpdatePresetInput,
+  UpdateProviderConfigInput,
 } from '@forward/shared';
 
 import { getApiBaseUrl } from './config';
@@ -28,7 +30,11 @@ interface GenerateChatInput {
   temperature?: number;
 }
 
-async function request(path: string, init?: RequestInit): Promise<Response> {
+interface RequestOptions extends RequestInit {
+  signal?: AbortSignal;
+}
+
+async function request(path: string, init?: RequestOptions): Promise<Response> {
   const isFormData = init?.body instanceof FormData;
 
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
@@ -38,12 +44,13 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(init?.headers ?? {}),
     },
+    signal: init?.signal ?? undefined,
   });
 
   return response;
 }
 
-async function expectJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function expectJson<T>(path: string, init?: RequestOptions): Promise<T> {
   const response = await request(path, init);
 
   if (!response.ok) {
@@ -66,6 +73,12 @@ export const api = {
       method: 'POST',
     });
   },
+  async createProviderConfig(input: CreateProviderConfigInput): Promise<ProviderConfig> {
+    return expectJson<ProviderConfig>('/providers', {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
   async deleteCharacter(characterId: string): Promise<void> {
     const response = await request(`/characters/${characterId}`, {
       method: 'DELETE',
@@ -84,6 +97,15 @@ export const api = {
       throw new Error(`failed to delete preset ${presetId}`);
     }
   },
+  async deleteProviderConfig(providerId: string): Promise<void> {
+    const response = await request(`/providers/${providerId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`failed to delete provider ${providerId}`);
+    }
+  },
   async createChat(input: CreateChatInput): Promise<Chat> {
     return expectJson<Chat>('/chats', {
       body: JSON.stringify(input),
@@ -96,13 +118,23 @@ export const api = {
       method: 'POST',
     });
   },
-  async generate(chatId: string, input: GenerateChatInput, onEvent: (event: NormalizedStreamEvent) => void): Promise<void> {
+  async deleteChat(chatId: string): Promise<void> {
+    const response = await request(`/chats/${chatId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`failed to delete chat ${chatId}`);
+    }
+  },
+  async generate(chatId: string, input: GenerateChatInput, onEvent: (event: NormalizedStreamEvent) => void, signal?: AbortSignal): Promise<void> {
     const response = await request(`/chats/${chatId}/generate`, {
       body: JSON.stringify(input),
       method: 'POST',
+      signal,
     });
 
-    await readSseStream(response, onEvent);
+    await readSseStream(response, onEvent, signal);
   },
   async getPromptPreview(chatId: string): Promise<PromptPreview> {
     return expectJson<PromptPreview>(`/chats/${chatId}/prompt-preview`);
@@ -177,6 +209,12 @@ export const api = {
   },
   async updatePreset(presetId: string, input: UpdatePresetInput): Promise<Preset> {
     return expectJson<Preset>(`/presets/${presetId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+  async updateProviderConfig(providerId: string, input: UpdateProviderConfigInput): Promise<ProviderConfig> {
+    return expectJson<ProviderConfig>(`/providers/${providerId}`, {
       body: JSON.stringify(input),
       method: 'PATCH',
     });

@@ -81,3 +81,85 @@ body {
 .rp-generating {
   animation: rp-pulse-glow 2s ease-in-out infinite;
 }
+
+.rp-markdown p {
+  margin: 0 0 0.6em;
+}
+
+.rp-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.rp-markdown h1,
+.rp-markdown h2,
+.rp-markdown h3 {
+  margin: 1em 0 0.4em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.rp-markdown h1 { font-size: 1.25em; }
+.rp-markdown h2 { font-size: 1.1em; }
+.rp-markdown h3 { font-size: 1em; }
+
+.rp-markdown code {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+}
+
+.rp-markdown pre {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.75rem;
+  margin: 0.8em 0;
+  overflow-x: auto;
+  padding: 1em;
+}
+
+.rp-markdown pre code {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+.rp-markdown ul,
+.rp-markdown ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.rp-markdown li {
+  margin: 0.2em 0;
+}
+
+.rp-markdown blockquote {
+  border-left: 3px solid rgba(90, 158, 158, 0.3);
+  margin: 0.8em 0;
+  padding: 0.3em 0.8em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.rp-markdown a {
+  color: var(--rp-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rp-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 1em 0;
+}
+
+.rp-markdown strong {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.rp-markdown em {
+  color: rgba(255, 255, 255, 0.7);
+}

@@ -4,6 +4,13 @@
     class="flex gap-3 rp-animate-enter"
   >
     <div
+      v-if="avatarUrl"
+      class="mt-0.5 h-9 w-9 shrink-0 overflow-hidden rounded-full"
+    >
+      <img :src="avatarUrl" alt="" class="h-full w-full object-cover" />
+    </div>
+    <div
+      v-else
       class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
       :style="avatarStyle"
     >
@@ -11,7 +18,7 @@
     </div>
     <div class="min-w-0 flex-1">
       <p class="text-[13px] font-medium text-[var(--rp-accent)]">{{ displayName }}</p>
-      <div class="mt-1.5 whitespace-pre-wrap text-[15px] leading-7 text-white/88">{{ content }}</div>
+      <div class="rp-markdown mt-1.5 text-[15px] leading-7 text-white/88" v-html="renderedContent"></div>
       <section
         v-if="hasReasoning && reasoningOpen"
         class="mt-3 rounded-xl border border-white/5 bg-black/30 px-3.5 py-3 text-sm leading-6 text-white/60"
@@ -50,6 +57,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
+import { getApiBaseUrl } from '../lib/config';
+import { renderMarkdown } from '../lib/markdown';
+
 interface Props {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -71,6 +81,11 @@ const avatarInitial = computed(() => {
   return name.charAt(0).toUpperCase();
 });
 
+const avatarUrl = computed(() => {
+  if (!props.characterAvatarPath) return null;
+  return `${getApiBaseUrl()}/media/avatars/${props.characterAvatarPath.split(/[/\\]/).pop()}`;
+});
+
 const avatarStyle = computed(() => {
   const name = props.characterName || 'Assistant';
   let hash = 0;
@@ -84,5 +99,10 @@ const avatarStyle = computed(() => {
     background: `hsl(${hue}, ${sat}%, ${lit}%)`,
     color: `hsl(${hue}, ${sat + 10}%, ${lit + 40}%)`,
   };
+});
+
+const renderedContent = computed(() => {
+  if (!props.content) return '';
+  return renderMarkdown(props.content);
 });
 </script>

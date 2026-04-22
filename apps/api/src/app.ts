@@ -1,5 +1,6 @@
 import {
   CreateChatInputSchema,
+  CreateProviderConfigInputSchema,
   LiveStreamRequestSchema,
   LoginRequestSchema,
   PromptPreviewSchema,
@@ -12,6 +13,10 @@ import {
   type Chat,
   type ProviderConfig,
 } from '@forward/shared';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { extname, resolve } from 'node:path';
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
@@ -248,12 +253,52 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.body(null, 204);
   });
 
+  app.get('/media/avatars/*', async (c) => {
+    const filePath = resolve(config.mediaRoot, c.req.path.replace('/media/', ''));
+
+    if (!filePath.startsWith(resolve(config.mediaRoot))) {
+      return c.json({ error: 'Forbidden' }, 403);
+    }
+
+    if (!existsSync(filePath)) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+
+    const buffer = await readFile(filePath);
+    const ext = extname(filePath).toLowerCase();
+    const mimeTypes: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+
+    return new Response(buffer, { headers: { 'content-type': mimeTypes[ext] ?? 'application/octet-stream' } });
+  });
+
   app.get('/providers', async (c) => {
     const payload = ProviderListResponseSchema.parse({
       providers: await dependencies.providerConfigs.list(),
     });
 
     return c.json(payload);
+  });
+
+  app.post('/providers', async (c) => {
+    const input = CreateProviderConfigInputSchema.parse(await c.req.json());
+    const providerConfig = await dependencies.providerConfigs.create(input);
+
+    return c.json(providerConfig, 201);
+  });
+
+  app.patch('/providers/:providerId', async (c) => {
+    const input = CreateProviderConfigInputSchema.partial().extend({
+      name: z.string().min(1).optional(),
+    }).parse(await c.req.json());
+    const providerConfig = await dependencies.providerConfigs.update(c.req.param('providerId'), input);
+
+    return c.json(providerConfig);
+  });
+
+  app.delete('/providers/:providerId', async (c) => {
+    await dependencies.providerConfigs.delete(c.req.param('providerId'));
+
+    return c.body(null, 204);
   });
 
   app.get('/providers/:providerId/models', async (c) => {
@@ -314,6 +359,12 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
 
       throw error;
     }
+  });
+
+  app.delete('/chats/:chatId', async (c) => {
+    await dependencies.chats.delete(c.req.param('chatId'));
+
+    return c.body(null, 204);
   });
 
   app.post('/chats/:chatId/messages', async (c) => {

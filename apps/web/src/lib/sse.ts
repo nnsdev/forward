@@ -3,6 +3,7 @@ import type { NormalizedStreamEvent } from '@forward/shared';
 export async function readSseStream(
   response: Response,
   onEvent: (event: NormalizedStreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (!response.ok) {
     throw new Error(`request failed with ${response.status}`);
@@ -17,6 +18,11 @@ export async function readSseStream(
   let buffer = '';
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel();
+      break;
+    }
+
     const { done, value } = await reader.read();
 
     buffer += decoder.decode(value, { stream: !done });

@@ -46,6 +46,19 @@ export const ProviderConfigSchema = z.object({
   reasoningEnabled: z.boolean().default(false),
 });
 
+export const CreateProviderConfigInputSchema = z.object({
+  name: z.string().min(1),
+  providerType: ProviderTypeSchema,
+  baseUrl: z.string().url(),
+  model: z.string().min(1),
+  apiKeyEnvVar: z.string().min(1).nullable().optional(),
+  reasoningEnabled: z.boolean().default(false),
+});
+
+export const UpdateProviderConfigInputSchema = CreateProviderConfigInputSchema.partial().extend({
+  name: z.string().min(1).optional(),
+});
+
 export const PresetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -124,6 +137,7 @@ export type CreateChatInput = z.infer<typeof CreateChatInputSchema>;
 export type CreateCharacterInput = z.infer<typeof CreateCharacterInputSchema>;
 export type CreateMessageInput = z.infer<typeof CreateMessageInputSchema>;
 export type CreatePresetInput = z.infer<typeof CreatePresetInputSchema>;
+export type CreateProviderConfigInput = z.infer<typeof CreateProviderConfigInputSchema>;
 export type GenerateChatInput = z.infer<typeof GenerateChatInputSchema>;
 export type Message = z.infer<typeof MessageSchema>;
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
@@ -134,3 +148,4 @@ export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 export type UpdateCharacterInput = z.infer<typeof UpdateCharacterInputSchema>;
 export type UpdateChatInput = z.infer<typeof UpdateChatInputSchema>;
 export type UpdatePresetInput = z.infer<typeof UpdatePresetInputSchema>;
+export type UpdateProviderConfigInput = z.infer<typeof UpdateProviderConfigInputSchema>;

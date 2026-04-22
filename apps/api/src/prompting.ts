@@ -84,7 +84,7 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
     chatId: input.chatId,
     messages: finalPromptMessages,
     preset: {
-      id: 'preset_default',
+      id: input.preset.id,
       name: input.preset.name,
     },
     provider: {

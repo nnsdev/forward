@@ -6,3 +6,7 @@ coverage/
 data/
 apps/*/dist/
 apps/*/.vite/
+*.tsbuildinfo
+packages/shared/src/*.js
+packages/shared/src/*.d.ts
+packages/shared/src/*.d.ts.map
