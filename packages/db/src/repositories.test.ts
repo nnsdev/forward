@@ -42,4 +42,77 @@ describe('repositories', () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.content).toBe('Hello world');
   });
+
+  it('deletes a chat and its messages', async () => {
+    const client = createSqliteDatabase();
+    initializeDatabase(client.sqlite);
+    const repositories = createRepositories(client);
+
+    const chat = await repositories.chats.create({ title: 'Deletable chat' });
+    await repositories.messages.create({ chatId: chat.id, content: 'msg1', role: 'user' });
+    await repositories.messages.create({ chatId: chat.id, content: 'msg2', role: 'user' });
+
+    expect(await repositories.messages.listByChatId(chat.id)).toHaveLength(2);
+
+    await repositories.chats.delete(chat.id);
+
+    expect(await repositories.chats.getById(chat.id)).toBeNull();
+    expect(await repositories.messages.listByChatId(chat.id)).toHaveLength(0);
+  });
+
+  it('deletes a message', async () => {
+    const client = createSqliteDatabase();
+    initializeDatabase(client.sqlite);
+    const repositories = createRepositories(client);
+
+    const chat = await repositories.chats.create({ title: 'Chat' });
+    const message = await repositories.messages.create({ chatId: chat.id, content: 'bye', role: 'user' });
+
+    await repositories.messages.delete(message.id);
+
+    expect(await repositories.messages.getById(message.id)).toBeNull();
+    expect(await repositories.messages.listByChatId(chat.id)).toHaveLength(0);
+  });
+
+  it('updates message content', async () => {
+    const client = createSqliteDatabase();
+    initializeDatabase(client.sqlite);
+    const repositories = createRepositories(client);
+
+    const chat = await repositories.chats.create({ title: 'Chat' });
+    const message = await repositories.messages.create({ chatId: chat.id, content: 'original', role: 'user' });
+
+    const updated = await repositories.messages.updateContent(message.id, 'updated content');
+
+    expect(updated.content).toBe('updated content');
+  });
+
+  it('creates, updates, and deletes provider configs', async () => {
+    const client = createSqliteDatabase();
+    initializeDatabase(client.sqlite);
+    const repositories = createRepositories(client);
+
+    const created = await repositories.providerConfigs.create({
+      baseUrl: 'http://localhost:1234',
+      model: 'llama3',
+      name: 'Test Provider',
+      providerType: 'openai-compatible',
+      reasoningEnabled: false,
+    });
+
+    expect(created.name).toBe('Test Provider');
+    expect(created.model).toBe('llama3');
+
+    const updated = await repositories.providerConfigs.update(created.id, {
+      name: 'Updated Provider',
+      model: 'llama3.1',
+    });
+
+    expect(updated.name).toBe('Updated Provider');
+    expect(updated.model).toBe('llama3.1');
+
+    await repositories.providerConfigs.delete(created.id);
+
+    expect(await repositories.providerConfigs.getById(created.id)).toBeNull();
+  });
 });

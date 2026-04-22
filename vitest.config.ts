@@ -1,0 +1,7 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    projects: ['apps/web/vite.config.ts', 'packages/db', 'packages/shared', 'apps/api'],
+  },
+});

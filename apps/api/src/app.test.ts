@@ -256,6 +256,175 @@ describe('api app', () => {
     });
   });
 
+  it('deletes a chat', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const authHeaders = { cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '' };
+
+    const createResponse = await app.request('/chats', {
+      body: JSON.stringify({ title: 'Delete me' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+    const created = (await createResponse.json()) as { id: string };
+
+    const deleteResponse = await app.request(`/chats/${created.id}`, {
+      headers: authHeaders,
+      method: 'DELETE',
+    });
+
+    expect(deleteResponse.status).toBe(204);
+
+    const listResponse = await app.request('/chats', { headers: authHeaders });
+    const list = (await listResponse.json()) as unknown[];
+    expect(list).toHaveLength(0);
+  });
+
+  it('deletes a message', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const authHeaders = { cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '' };
+
+    const createChatResponse = await app.request('/chats', {
+      body: JSON.stringify({ providerConfigId: 'provider_local', title: 'Chat' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+    const chat = (await createChatResponse.json()) as { id: string };
+
+    const createMsgResponse = await app.request(`/chats/${chat.id}/messages`, {
+      body: JSON.stringify({ content: 'hello', role: 'user' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+    const msg = (await createMsgResponse.json()) as { id: string };
+
+    const deleteResponse = await app.request(`/messages/${msg.id}`, {
+      headers: authHeaders,
+      method: 'DELETE',
+    });
+
+    expect(deleteResponse.status).toBe(204);
+
+    const messagesResponse = await app.request(`/chats/${chat.id}/messages`, { headers: authHeaders });
+    const messages = (await messagesResponse.json()) as unknown[];
+    expect(messages).toHaveLength(0);
+  });
+
+  it('creates, updates, and deletes provider configs', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const authHeaders = { cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '' };
+
+    const createResponse = await app.request('/providers', {
+      body: JSON.stringify({
+        baseUrl: 'http://localhost:9999',
+        model: 'test-model',
+        name: 'Test Provider',
+        providerType: 'openai-compatible',
+        reasoningEnabled: false,
+      }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: string; name: string; model: string };
+
+    expect(created.name).toBe('Test Provider');
+    expect(created.model).toBe('test-model');
+
+    const updateResponse = await app.request(`/providers/${created.id}`, {
+      body: JSON.stringify({ name: 'Updated Provider', model: 'new-model' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'PATCH',
+    });
+
+    expect(updateResponse.status).toBe(200);
+    const updated = (await updateResponse.json()) as { name: string; model: string };
+    expect(updated.name).toBe('Updated Provider');
+    expect(updated.model).toBe('new-model');
+
+    const deleteResponse = await app.request(`/providers/${created.id}`, {
+      headers: authHeaders,
+      method: 'DELETE',
+    });
+
+    expect(deleteResponse.status).toBe(204);
+  });
+
+  it('retries generation by deleting last assistant and regenerating', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const authHeaders = { cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '' };
+
+    const createChatResponse = await app.request('/chats', {
+      body: JSON.stringify({ providerConfigId: 'provider_local', title: 'Retry chat' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+    const chat = (await createChatResponse.json()) as { id: string };
+
+    const generateResponse = await app.request(`/chats/${chat.id}/generate`, {
+      body: JSON.stringify({ content: 'Say pong' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+
+    expect(generateResponse.status).toBe(200);
+
+    const messagesBefore = (await (await app.request(`/chats/${chat.id}/messages`, { headers: authHeaders })).json()) as unknown[];
+    expect(messagesBefore).toHaveLength(2);
+
+    const retryResponse = await app.request(`/chats/${chat.id}/retry`, {
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+
+    expect(retryResponse.status).toBe(200);
+
+    const messagesAfter = (await (await app.request(`/chats/${chat.id}/messages`, { headers: authHeaders })).json()) as unknown[];
+    const userMessages = messagesAfter.filter((m: any) => m.role === 'user');
+    const assistantMessages = messagesAfter.filter((m: any) => m.role === 'assistant');
+    expect(userMessages).toHaveLength(1);
+    expect(assistantMessages).toHaveLength(1);
+  });
+
+  it('rejects password change with wrong current password', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const authHeaders = { cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '' };
+
+    const response = await app.request('/auth/change-password', {
+      body: JSON.stringify({ currentPassword: 'wrong', newPassword: 'newpass' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(401);
+  });
+
   it('lists presets and allows chats to attach them', async () => {
     const { app } = await createTestApp();
     const loginResponse = await app.request('/auth/login', {
