@@ -10,6 +10,7 @@ interface BuildPromptInput {
   character: Character | null;
   chatId: string;
   config: AppConfig;
+  countTokens(text: string): Promise<number>;
   messages: Message[];
   preset: Preset;
   provider: ProviderConfig;
@@ -174,7 +175,7 @@ function formatMessage(template: InstructTemplate, role: 'system' | 'user' | 'as
   }
 }
 
-export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
+export async function buildPromptPreview(input: BuildPromptInput): Promise<PromptPreview> {
   const template = resolveTemplate(input.preset);
   const baseSystemPrompt = input.character
     ? buildCharacterSystemPrompt(input.character, input.preset.systemPrompt)
@@ -226,7 +227,7 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
 
     const combined = candidateParts.join('\n');
 
-    if (estimateTokens([{ content: combined }]) <= maxPromptTokens) {
+    if ((await input.countTokens(combined)) <= maxPromptTokens) {
       break;
     }
 
@@ -278,7 +279,7 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
       type: input.provider.providerType,
     },
     templateName: template.name,
-    tokenEstimate: estimateTokens([{ content: finalRawContent }]),
+    tokenEstimate: await input.countTokens(finalRawContent),
     truncation: {
       applied: droppedMessageIds.length > 0,
       droppedMessageIds,

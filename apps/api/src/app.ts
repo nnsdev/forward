@@ -1,3 +1,4 @@
+import type { PromptPreview } from '@forward/shared';
 import {
   AppSettingsSchema,
   CharacterSchema,
@@ -277,7 +278,7 @@ async function resolvePreset(
 }
 
 function buildGenerationInput(
-  promptPreview: ReturnType<typeof buildPromptPreview>,
+  promptPreview: PromptPreview,
   preset: Preset,
   providerConfig: ProviderConfig,
   overrides: {
@@ -657,11 +658,13 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
       const messages = await dependencies.messages.listByChatId(chat.id);
-      const preview = buildPromptPreview({
+      const adapter = dependencies.createProviderAdapter(providerConfig);
+      const preview = await buildPromptPreview({
         authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
+        countTokens: adapter.countTokens.bind(adapter),
         messages,
         preset,
         provider: providerConfig,
@@ -697,11 +700,13 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const history = await dependencies.messages.listByChatId(chat.id);
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
-      const promptPreview = buildPromptPreview({
+      const adapter = dependencies.createProviderAdapter(providerConfig);
+      const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
+        countTokens: adapter.countTokens.bind(adapter),
         messages: history,
         preset,
         provider: providerConfig,
@@ -714,7 +719,6 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         role: 'assistant',
         state: 'streaming',
       });
-      const adapter = dependencies.createProviderAdapter(providerConfig);
 
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,
@@ -777,11 +781,13 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
-      const promptPreview = buildPromptPreview({
+      const adapter = dependencies.createProviderAdapter(providerConfig);
+      const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
+        countTokens: adapter.countTokens.bind(adapter),
         messages: history,
         preset,
         provider: providerConfig,
@@ -798,7 +804,6 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         state: 'streaming',
       });
       await dependencies.messages.setActiveAttempt(assistantMessage.id);
-      const adapter = dependencies.createProviderAdapter(providerConfig);
 
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,
@@ -840,11 +845,13 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
-      const promptPreview = buildPromptPreview({
+      const adapter = dependencies.createProviderAdapter(providerConfig);
+      const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
+        countTokens: adapter.countTokens.bind(adapter),
         messages: [
           ...history,
           {
@@ -867,7 +874,6 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       });
 
       await dependencies.messages.updateState(lastMessage.id, 'streaming');
-      const adapter = dependencies.createProviderAdapter(providerConfig);
 
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,

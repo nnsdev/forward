@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { buildPromptPreview } from './prompting';
 
+function makeCountTokens(): (text: string) => Promise<number> {
+  return async (text: string) => Math.max(1, Math.ceil(text.length / 4));
+}
+
 const baseConfig = {
   appPassword: 'secret',
   databasePath: ':memory:',
@@ -54,8 +58,8 @@ const settings = {
 };
 
 describe('buildPromptPreview', () => {
-  it('builds a richer character system prompt', () => {
-    const preview = buildPromptPreview({
+  it('builds a richer character system prompt', async () => {
+    const preview = await buildPromptPreview({
       character: {
         avatarAssetPath: null,
         description: 'An observant astronomer.',
@@ -68,6 +72,7 @@ describe('buildPromptPreview', () => {
       },
       chatId: 'chat_1',
       config: baseConfig,
+      countTokens: makeCountTokens(),
       messages: [],
       preset: {
         contextLength: 4096,
@@ -96,11 +101,12 @@ describe('buildPromptPreview', () => {
     expect(preview.messages[0]?.content).toContain('Example dialogue:');
   });
 
-  it('drops oldest history when the prompt budget is exceeded', () => {
-    const preview = buildPromptPreview({
+  it('drops oldest history when the prompt budget is exceeded', async () => {
+    const preview = await buildPromptPreview({
       character: null,
       chatId: 'chat_1',
       config: baseConfig,
+      countTokens: makeCountTokens(),
       messages: Array.from({ length: 30 }, (_, index) => ({
         attemptGroupId: null,
         attemptIndex: 0,
@@ -142,11 +148,12 @@ describe('buildPromptPreview', () => {
     expect(preview.tokenEstimate).toBeLessThanOrEqual(2048);
   });
 
-  it('injects persona into the system prompt for message mode', () => {
-    const preview = buildPromptPreview({
+  it('injects persona into the system prompt for message mode', async () => {
+    const preview = await buildPromptPreview({
       character: null,
       chatId: 'chat_1',
       config: baseConfig,
+      countTokens: makeCountTokens(),
       messages: [],
       preset: {
         contextLength: 4096,
@@ -175,8 +182,8 @@ describe('buildPromptPreview', () => {
     expect(preview.messages[0]?.content).toContain('User persona:');
   });
 
-  it('folds leading assistant opening messages into the system prompt for message mode', () => {
-    const preview = buildPromptPreview({
+  it('folds leading assistant opening messages into the system prompt for message mode', async () => {
+    const preview = await buildPromptPreview({
       character: {
         avatarAssetPath: null,
         description: 'An observant astronomer.',
@@ -189,6 +196,7 @@ describe('buildPromptPreview', () => {
       },
       chatId: 'chat_1',
       config: baseConfig,
+      countTokens: makeCountTokens(),
       messages: [
         {
           attemptGroupId: 'attempt_1',

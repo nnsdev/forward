@@ -71,4 +71,53 @@ describe('createOpenAICompatibleAdapter', () => {
     const requestInit = firstCall?.[1] ?? {};
     expect(requestInit.body).toContain('"thinking_budget_tokens":64');
   });
+
+  it('counts tokens via /tokenize when available', async () => {
+    const fetchFn = vi.fn(async (url: string) => {
+      if (url.endsWith('/tokenize')) {
+        return new Response(JSON.stringify({ tokens: [1, 2, 3, 4, 5] }), { status: 200 });
+      }
+
+      return new Response('data: [DONE]\n\n', { status: 200 });
+    });
+    const adapter = createOpenAICompatibleAdapter({ config: providerConfig, fetchFn: fetchFn as typeof fetch });
+
+    const count = await adapter.countTokens('hello');
+
+    expect(count).toBe(5);
+    expect(fetchFn).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/tokenize',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('falls back to char estimate when /tokenize returns 404', async () => {
+    const fetchFn = vi.fn(async (url: string) => {
+      if (url.endsWith('/tokenize')) {
+        return new Response('Not found', { status: 404 });
+      }
+
+      return new Response('data: [DONE]\n\n', { status: 200 });
+    });
+    const adapter = createOpenAICompatibleAdapter({ config: providerConfig, fetchFn: fetchFn as typeof fetch });
+
+    const count = await adapter.countTokens('hello world');
+
+    expect(count).toBe(Math.ceil(11 / 4));
+  });
+
+  it('falls back to char estimate when /tokenize throws', async () => {
+    const fetchFn = vi.fn(async (url: string) => {
+      if (url.endsWith('/tokenize')) {
+        throw new Error('Network error');
+      }
+
+      return new Response('data: [DONE]\n\n', { status: 200 });
+    });
+    const adapter = createOpenAICompatibleAdapter({ config: providerConfig, fetchFn: fetchFn as typeof fetch });
+
+    const count = await adapter.countTokens('hello');
+
+    expect(count).toBe(Math.ceil(5 / 4));
+  });
 });

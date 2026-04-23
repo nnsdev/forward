@@ -270,12 +270,63 @@ function buildCompletionBody(config: ProviderConfig, input: StreamGenerateInput 
   return body;
 }
 
+function deriveRootUrl(baseUrl: string): string {
+  const normalized = normalizeBaseUrl(baseUrl);
+
+  if (normalized.endsWith('/v1')) {
+    return normalized.slice(0, -3);
+  }
+
+  return normalized;
+}
+
+function estimateTokensFallback(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
 export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOptions): ProviderAdapter {
   const fetchFn = options.fetchFn ?? fetch;
   const baseUrl = normalizeBaseUrl(options.config.baseUrl);
+  const rootUrl = deriveRootUrl(baseUrl);
   const headers = buildHeaders(options.apiKey);
+  let tokenizeAvailable: boolean | null = null;
 
   return {
+    async countTokens(text) {
+      if (tokenizeAvailable === false) {
+        return estimateTokensFallback(text);
+      }
+
+      try {
+        const response = await fetchFn(`${rootUrl}/tokenize`, {
+          body: JSON.stringify({ content: text }),
+          headers,
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          tokenizeAvailable = false;
+
+          return estimateTokensFallback(text);
+        }
+
+        const payload = (await response.json()) as { tokens?: number[] };
+
+        if (!Array.isArray(payload.tokens)) {
+          tokenizeAvailable = false;
+
+          return estimateTokensFallback(text);
+        }
+
+        tokenizeAvailable = true;
+
+        return payload.tokens.length;
+      } catch {
+        tokenizeAvailable = false;
+
+        return estimateTokensFallback(text);
+      }
+    },
     async listModels() {
       const response = await fetchFn(`${baseUrl}/v1/models`, {
         headers,

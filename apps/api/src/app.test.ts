@@ -41,6 +41,9 @@ async function createTestApp() {
   });
 
   const createProviderAdapter = (): ProviderAdapter => ({
+    async countTokens(text: string) {
+      return Math.max(1, Math.ceil(text.length / 4));
+    },
     async listModels() {
       return [{ id: 'qwen' }, { id: 'roci' }];
     },

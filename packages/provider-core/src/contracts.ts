@@ -44,6 +44,7 @@ export type StreamGenerateInput = StreamGenerateBaseInput & (
 );
 
 export interface ProviderAdapter {
+  countTokens(text: string): Promise<number>;
   listModels(): Promise<ProviderModel[]>;
   streamGenerate(input: StreamGenerateInput): AsyncIterable<ProviderChunk>;
   validateConfig(): Promise<void>;
