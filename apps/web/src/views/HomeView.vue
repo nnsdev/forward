@@ -1125,7 +1125,7 @@ function autoResize() {
 }
 
 async function createChat() {
-  await chatStore.ensureChat();
+  await chatStore.createNewChat();
 }
 
 function confirmDeleteChat(chatId: string) {

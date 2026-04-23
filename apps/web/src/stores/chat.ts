@@ -218,6 +218,9 @@ export const useChatStore = defineStore('chat', {
         return this.activeChat;
       }
 
+      return this.createNewChat();
+    },
+    async createNewChat(): Promise<Chat> {
       const provider = this.defaultProvider;
       const preset = this.activePreset ?? this.presets[0] ?? null;
       const chat = await api.createChat({
