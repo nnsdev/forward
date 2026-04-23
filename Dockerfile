@@ -34,6 +34,7 @@ COPY packages/provider-core/package.json packages/provider-core/
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/apps/api/dist apps/api/dist
+COPY --from=build /app/apps/web/dist apps/web/dist
 COPY --from=build /app/packages/db/dist packages/db/dist
 COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/packages/provider-core/dist packages/provider-core/dist

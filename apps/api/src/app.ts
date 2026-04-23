@@ -40,6 +40,25 @@ import { importPresetTemplateFile } from './preset-import';
 import { buildPromptPreview } from './prompting';
 import type { AppDependencies } from './runtime';
 
+const webDistRoot = resolve('apps/web/dist');
+
+const staticContentTypes: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.gif': 'image/gif',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+
 async function writeStreamEvent(
   stream: Parameters<typeof streamSSE>[1] extends (stream: infer T) => Promise<void> ? T : never,
   event: unknown,
@@ -137,6 +156,10 @@ function isAllowedOrigin(origin: string | undefined, configuredOrigins: string[]
 
 function sanitizeFileStem(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '') || 'persona';
+}
+
+function getStaticContentType(filePath: string): string {
+  return staticContentTypes[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
 }
 
 async function persistAvatar(config: AppConfig, filename: string, buffer: Buffer): Promise<string> {
@@ -944,6 +967,39 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
           type: 'response.error',
         });
       }
+    });
+  });
+
+  app.get('*', async (c) => {
+    if (!existsSync(webDistRoot)) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+
+    const requestPath = c.req.path === '/' ? '/index.html' : c.req.path;
+    const requestedFilePath = resolve(webDistRoot, `.${requestPath}`);
+
+    if (requestedFilePath.startsWith(webDistRoot) && existsSync(requestedFilePath)) {
+      return new Response(await readFile(requestedFilePath), {
+        headers: {
+          'content-type': getStaticContentType(requestedFilePath),
+        },
+      });
+    }
+
+    if (extname(c.req.path)) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+
+    const indexFilePath = resolve(webDistRoot, 'index.html');
+
+    if (!existsSync(indexFilePath)) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+
+    return new Response(await readFile(indexFilePath), {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+      },
     });
   });
 
