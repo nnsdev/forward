@@ -218,6 +218,26 @@
       </div>
 
       <div class="shrink-0 border-t border-white/5 bg-[var(--rp-bg)]">
+        <div class="px-6 pt-2 lg:px-10">
+          <button
+            type="button"
+            class="text-[11px] text-white/20 transition hover:text-white/50"
+            @click="authorNoteOpen = !authorNoteOpen"
+          >
+            {{ authorNoteOpen ? 'Hide' : "Author's note" }}
+            <span v-if="chatStore.activeChat?.authorNote" class="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--rp-accent)]" />
+          </button>
+          <div v-if="authorNoteOpen" class="mt-1.5">
+            <textarea
+              v-model="authorNoteDraft"
+              class="min-h-16 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white/80 outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Instructions specific to this chat..."
+              rows="2"
+              @blur="saveAuthorNote"
+              @keydown.enter.prevent="saveAuthorNote"
+            />
+          </div>
+        </div>
         <form class="flex items-end gap-3 px-6 py-3 lg:px-10" @submit.prevent="submitMessage">
           <textarea
             id="composer"
@@ -821,6 +841,8 @@ import { useChatStore } from '../stores/chat';
 import { useSessionStore } from '../stores/session';
 
 const chatStore = useChatStore();
+const authorNoteDraft = ref('');
+const authorNoteOpen = ref(false);
 const characterPanelOpen = ref(false);
 const composer = ref('');
 const composerRef = ref<HTMLTextAreaElement | null>(null);
@@ -880,6 +902,18 @@ const selectedTemplateName = ref<string>('Chat messages');
 const router = useRouter();
 const sessionStore = useSessionStore();
 let firstMessageSent = false;
+
+watch(() => chatStore.activeChat?.id, () => {
+  authorNoteDraft.value = chatStore.activeChat?.authorNote ?? '';
+});
+
+async function saveAuthorNote() {
+  const note = authorNoteDraft.value;
+
+  if (chatStore.activeChat && note !== chatStore.activeChat.authorNote) {
+    await chatStore.updateChatAuthorNote(note);
+  }
+}
 
 function avatarStyleForName(name: string) {
   let hash = 0;

@@ -136,6 +136,7 @@ export const ChatSchema = z.object({
   characterId: z.string().min(1).nullable(),
   presetId: z.string().min(1).nullable(),
   providerConfigId: z.string().min(1).nullable(),
+  authorNote: z.string().default(''),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -145,6 +146,7 @@ export const CreateChatInputSchema = z.object({
   characterId: z.string().min(1).nullable().optional(),
   presetId: z.string().min(1).nullable().optional(),
   providerConfigId: z.string().min(1).nullable().optional(),
+  authorNote: z.string().default(''),
 });
 
 export const UpdateChatInputSchema = z
@@ -153,6 +155,7 @@ export const UpdateChatInputSchema = z
     presetId: z.string().min(1).nullable().optional(),
     providerConfigId: z.string().min(1).nullable().optional(),
     title: z.string().min(1).optional(),
+    authorNote: z.string().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'At least one field must be updated');
 

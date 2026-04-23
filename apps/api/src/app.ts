@@ -199,6 +199,7 @@ const UpdateCharacterRouteSchema = CreateCharacterRouteSchema.partial().extend({
 
 const UpdateChatRouteSchema = z
   .object({
+    authorNote: z.string().optional(),
     characterId: z.string().min(1).nullable().optional(),
     presetId: z.string().min(1).nullable().optional(),
     providerConfigId: z.string().min(1).nullable().optional(),
@@ -657,6 +658,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const settings = await dependencies.appSettings.get();
       const messages = await dependencies.messages.listByChatId(chat.id);
       const preview = buildPromptPreview({
+        authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
@@ -696,6 +698,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
       const promptPreview = buildPromptPreview({
+        authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
@@ -775,6 +778,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
       const promptPreview = buildPromptPreview({
+        authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,
@@ -837,6 +841,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
       const settings = await dependencies.appSettings.get();
       const promptPreview = buildPromptPreview({
+        authorNote: chat.authorNote,
         character,
         chatId: chat.id,
         config,

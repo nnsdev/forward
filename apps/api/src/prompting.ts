@@ -6,6 +6,7 @@ import type { AppConfig } from './config';
 const DEFAULT_MAX_PROMPT_TOKENS = 131072;
 
 interface BuildPromptInput {
+  authorNote?: string;
   character: Character | null;
   chatId: string;
   config: AppConfig;
@@ -178,7 +179,11 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
   const baseSystemPrompt = input.character
     ? buildCharacterSystemPrompt(input.character, input.preset.systemPrompt)
     : (input.preset.systemPrompt || input.config.defaultAssistantSystemPrompt);
-  const mergedSystemPrompt = compactSections([baseSystemPrompt, buildPersonaSection(input.settings)]);
+  const mergedSystemPrompt = compactSections([
+    baseSystemPrompt,
+    buildPersonaSection(input.settings),
+    input.authorNote?.trim() ? `Author's note:\n${input.authorNote.trim()}` : undefined,
+  ]);
 
   const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
 

@@ -54,6 +54,7 @@ export const chats = sqliteTable('chats', {
   characterId: text('character_id'),
   presetId: text('preset_id'),
   providerConfigId: text('provider_config_id'),
+  authorNote: text('author_note').notNull().default(''),
   ...timestamps,
 });
 

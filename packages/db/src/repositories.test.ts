@@ -23,6 +23,7 @@ describe('repositories', () => {
     });
 
     const chat = await repositories.chats.create({
+      authorNote: '',
       providerConfigId: 'provider_local',
       title: 'Foundation chat',
     });
@@ -48,7 +49,7 @@ describe('repositories', () => {
     initializeDatabase(client.sqlite);
     const repositories = createRepositories(client);
 
-    const chat = await repositories.chats.create({ title: 'Deletable chat' });
+    const chat = await repositories.chats.create({ authorNote: '', title: 'Deletable chat' });
     await repositories.messages.create({ chatId: chat.id, content: 'msg1', role: 'user' });
     await repositories.messages.create({ chatId: chat.id, content: 'msg2', role: 'user' });
 
@@ -65,7 +66,7 @@ describe('repositories', () => {
     initializeDatabase(client.sqlite);
     const repositories = createRepositories(client);
 
-    const chat = await repositories.chats.create({ title: 'Chat' });
+    const chat = await repositories.chats.create({ authorNote: '', title: 'Chat' });
     const message = await repositories.messages.create({ chatId: chat.id, content: 'bye', role: 'user' });
 
     await repositories.messages.delete(message.id);
@@ -79,7 +80,7 @@ describe('repositories', () => {
     initializeDatabase(client.sqlite);
     const repositories = createRepositories(client);
 
-    const chat = await repositories.chats.create({ title: 'Chat' });
+    const chat = await repositories.chats.create({ authorNote: '', title: 'Chat' });
     const message = await repositories.messages.create({ chatId: chat.id, content: 'original', role: 'user' });
 
     const updated = await repositories.messages.updateContent(message.id, 'updated content');

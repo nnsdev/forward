@@ -147,6 +147,7 @@ function mapPreset(row: typeof presets.$inferSelect): Preset {
 
 function mapChat(row: typeof chats.$inferSelect): Chat {
   return ChatSchema.parse({
+    authorNote: row.authorNote ?? '',
     characterId: row.characterId ?? null,
     createdAt: row.createdAt,
     id: row.id,
@@ -357,6 +358,7 @@ export function createChatRepository(client: SqliteDatabaseClient): ChatReposito
       client.db
         .insert(chats)
         .values({
+          authorNote: input.authorNote ?? '',
           characterId: input.characterId ?? null,
           createdAt: timestamp,
           id,
@@ -399,6 +401,7 @@ export function createChatRepository(client: SqliteDatabaseClient): ChatReposito
       client.db
         .update(chats)
         .set({
+          authorNote: input.authorNote === undefined ? existing.authorNote : input.authorNote,
           characterId: input.characterId === undefined ? existing.characterId : input.characterId,
           presetId: input.presetId === undefined ? existing.presetId : input.presetId,
           providerConfigId: input.providerConfigId === undefined ? existing.providerConfigId : input.providerConfigId,
