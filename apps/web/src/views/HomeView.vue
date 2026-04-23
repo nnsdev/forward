@@ -310,56 +310,19 @@
         </div>
 
         <div class="p-4 space-y-3">
-          <form class="space-y-2" @submit.prevent="saveCharacter">
-            <input
-              v-model="characterForm.name"
-              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Character name"
-            />
-            <textarea
-              v-model="characterForm.description"
-              class="min-h-16 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Description"
-            />
-            <textarea
-              v-model="characterForm.personality"
-              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Personality traits"
-            />
-            <textarea
-              v-model="characterForm.scenario"
-              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Scenario / setting"
-            />
-            <textarea
-              v-model="characterForm.firstMessage"
-              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="First message (greeting)"
-            />
-            <textarea
-              v-model="characterForm.exampleDialogue"
-              class="min-h-14 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Example dialogue"
-            />
-            <div class="flex gap-2">
-              <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
-                {{ editingCharacterId ? 'Save' : 'Create' }}
-              </button>
-              <button
-                v-if="editingCharacterId"
-                class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/35 transition hover:text-white/60"
-                type="button"
-                @click="resetCharacterForm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-
-          <label class="flex cursor-pointer items-center justify-center rounded-lg border border-white/8 px-3 py-2 text-sm text-white/40 transition hover:bg-white/[0.03] hover:text-white/70">
-            Import character
-            <input class="hidden" type="file" accept=".json,image/png" @change="importCharacter" />
-          </label>
+          <div class="flex gap-2">
+            <button
+              class="flex-1 rounded-lg border border-white/8 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+              type="button"
+              @click="resetCharacterForm(); showCharacterEditor = true;"
+            >
+              New character
+            </button>
+            <label class="flex cursor-pointer items-center justify-center rounded-lg border border-white/8 px-3 py-2 text-sm text-white/40 transition hover:bg-white/[0.03] hover:text-white/70">
+              Import
+              <input class="hidden" type="file" accept=".json,image/png" @change="importCharacter" />
+            </label>
+          </div>
 
           <div class="space-y-1">
             <article
@@ -413,6 +376,59 @@
       </div>
     </aside>
 
+    <div v-if="showCharacterEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showCharacterEditor = false">
+      <div class="w-[28rem] max-h-[85vh] overflow-y-auto rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
+        <p class="text-sm font-medium text-white/85">{{ editingCharacterId ? 'Edit character' : 'New character' }}</p>
+        <form class="mt-4 space-y-3" @submit.prevent="saveCharacter">
+          <input
+            v-model="characterForm.name"
+            class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Character name"
+          />
+          <textarea
+            v-model="characterForm.description"
+            class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Description"
+          />
+          <textarea
+            v-model="characterForm.personality"
+            class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Personality traits"
+          />
+          <textarea
+            v-model="characterForm.scenario"
+            class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Scenario / setting"
+          />
+          <textarea
+            v-model="characterForm.firstMessage"
+            class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="First message (greeting)"
+          />
+          <textarea
+            v-model="characterForm.exampleDialogue"
+            class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Example dialogue"
+          />
+          <div class="flex gap-2">
+            <button
+              class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+              type="button"
+              @click="showCharacterEditor = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="flex-1 rounded-lg bg-[var(--rp-accent)] px-3 py-2 text-sm font-medium text-[#0a1212] transition hover:brightness-110"
+              type="submit"
+            >
+              {{ editingCharacterId ? 'Save' : 'Create' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <aside
       v-if="presetPanelOpen"
       class="rp-animate-fade w-64 shrink-0 overflow-hidden border-l border-white/5 bg-[var(--rp-bg)] lg:w-72"
@@ -424,181 +440,23 @@
         </div>
 
         <div class="p-4 space-y-3">
-          <form class="space-y-2" @submit.prevent="savePreset">
-            <input
-              v-model="presetForm.name"
-              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-              placeholder="Preset name"
-            />
-            <div>
-              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Template</label>
-              <select
-                v-model="selectedTemplateName"
-                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                @change="applySelectedTemplate"
-              >
-                <option value="Chat messages">Chat messages</option>
-                <option
-                  v-if="selectedTemplateName !== 'Chat messages' && !BUILT_IN_TEMPLATES.some((template) => template.name === selectedTemplateName)"
-                  :value="selectedTemplateName"
-                >
-                  {{ selectedTemplateName }} (Imported)
-                </option>
-                <option v-for="template in BUILT_IN_TEMPLATES" :key="template.name" :value="template.name">
-                  {{ template.name }}
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">System prompt</label>
-              <textarea
-                v-model="presetForm.systemPrompt"
-                class="min-h-28 w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                placeholder="Optional system prompt override"
-              />
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Temperature</label>
-                <input
-                  v-model.number="presetForm.temperature"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  max="2"
-                  min="0"
-                  step="0.1"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Max tokens</label>
-                <input
-                  v-model.number="presetForm.maxOutputTokens"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  min="1"
-                  step="1"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Top P</label>
-                <input
-                  v-model.number="presetForm.topP"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  max="1"
-                  min="0"
-                  step="0.05"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Top K</label>
-                <input
-                  v-model.number="presetForm.topK"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  min="0"
-                  step="1"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Min P</label>
-                <input
-                  v-model.number="presetForm.minP"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  max="1"
-                  min="0"
-                  step="0.01"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Repeat penalty</label>
-                <input
-                  v-model.number="presetForm.repeatPenalty"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  min="1"
-                  step="0.05"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Freq penalty</label>
-                <input
-                  v-model.number="presetForm.frequencyPenalty"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  max="2"
-                  min="0"
-                  step="0.05"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Pres penalty</label>
-                <input
-                  v-model.number="presetForm.presencePenalty"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  max="2"
-                  min="0"
-                  step="0.05"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Context length</label>
-                <input
-                  v-model.number="presetForm.contextLength"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  min="4096"
-                  step="256"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Seed</label>
-                <input
-                  v-model.number="presetForm.seed"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  min="0"
-                  placeholder="Random"
-                  step="1"
-                  type="number"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Thinking budget</label>
-                <input
-                  :value="presetForm.thinkingBudgetTokens ?? ''"
-                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
-                  min="0"
-                  placeholder="Unlimited"
-                  step="1"
-                  type="number"
-                  @input="updateThinkingBudget"
-                />
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
-                {{ editingPresetId ? 'Save' : 'Create' }}
-              </button>
-              <button
-                class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/45 transition hover:text-white/70"
-                type="button"
-                @click="presetImportInputRef?.click()"
-              >
-                Import ST JSON
-              </button>
-              <button
-                v-if="editingPresetId"
-                class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/35 transition hover:text-white/60"
-                type="button"
-                @click="resetPresetForm"
-              >
-                Cancel
-              </button>
-            </div>
+          <div class="flex gap-2">
+            <button
+              class="flex-1 rounded-lg border border-white/8 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+              type="button"
+              @click="resetPresetForm(); showPresetEditor = true;"
+            >
+              New preset
+            </button>
+            <button
+              class="rounded-lg border border-white/8 px-3 py-2 text-sm text-white/45 transition hover:text-white/70"
+              type="button"
+              @click="presetImportInputRef?.click()"
+            >
+              Import
+            </button>
             <input ref="presetImportInputRef" class="hidden" type="file" accept="application/json,.json" @change="importPresetTemplate" />
-          </form>
+          </div>
 
           <div class="space-y-1">
             <div
@@ -636,6 +494,181 @@
           </div>
       </div>
     </aside>
+
+    <div v-if="showPresetEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showPresetEditor = false">
+      <div class="w-[32rem] max-h-[85vh] overflow-y-auto rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
+        <p class="text-sm font-medium text-white/85">{{ editingPresetId ? 'Edit preset' : 'New preset' }}</p>
+        <form class="mt-4 space-y-3" @submit.prevent="savePreset">
+          <input
+            v-model="presetForm.name"
+            class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Preset name"
+          />
+          <div>
+            <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Template</label>
+            <select
+              v-model="selectedTemplateName"
+              class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              @change="applySelectedTemplate"
+            >
+              <option value="Chat messages">Chat messages</option>
+              <option
+                v-if="selectedTemplateName !== 'Chat messages' && !BUILT_IN_TEMPLATES.some((template) => template.name === selectedTemplateName)"
+                :value="selectedTemplateName"
+              >
+                {{ selectedTemplateName }} (Imported)
+              </option>
+              <option v-for="template in BUILT_IN_TEMPLATES" :key="template.name" :value="template.name">
+                {{ template.name }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">System prompt</label>
+            <textarea
+              v-model="presetForm.systemPrompt"
+              class="min-h-28 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+              placeholder="Optional system prompt override"
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Temperature</label>
+              <input
+                v-model.number="presetForm.temperature"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                max="2"
+                min="0"
+                step="0.1"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Max tokens</label>
+              <input
+                v-model.number="presetForm.maxOutputTokens"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="1"
+                step="1"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Top P</label>
+              <input
+                v-model.number="presetForm.topP"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                max="1"
+                min="0"
+                step="0.05"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Top K</label>
+              <input
+                v-model.number="presetForm.topK"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="0"
+                step="1"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Min P</label>
+              <input
+                v-model.number="presetForm.minP"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                max="1"
+                min="0"
+                step="0.01"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Repeat penalty</label>
+              <input
+                v-model.number="presetForm.repeatPenalty"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="1"
+                step="0.05"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Freq penalty</label>
+              <input
+                v-model.number="presetForm.frequencyPenalty"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                max="2"
+                min="0"
+                step="0.05"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Pres penalty</label>
+              <input
+                v-model.number="presetForm.presencePenalty"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                max="2"
+                min="0"
+                step="0.05"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Context length</label>
+              <input
+                v-model.number="presetForm.contextLength"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="4096"
+                step="256"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Seed</label>
+              <input
+                v-model.number="presetForm.seed"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="0"
+                placeholder="Random"
+                step="1"
+                type="number"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Thinking budget</label>
+              <input
+                :value="presetForm.thinkingBudgetTokens ?? ''"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="0"
+                placeholder="Unlimited"
+                step="1"
+                type="number"
+                @input="updateThinkingBudget"
+              />
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button
+              class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+              type="button"
+              @click="showPresetEditor = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="flex-1 rounded-lg bg-[var(--rp-accent)] px-3 py-2 text-sm font-medium text-[#0a1212] transition hover:brightness-110"
+              type="submit"
+            >
+              {{ editingPresetId ? 'Save' : 'Create' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <aside
       v-if="providerPanelOpen"
@@ -874,7 +907,9 @@ const renameTitle = ref('');
 const renamingChatId = ref<string | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const sidebarOpen = ref(false);
+const showCharacterEditor = ref(false);
 const showPersonaEditor = ref(false);
+const showPresetEditor = ref(false);
 const showPasswordChange = ref(false);
 const passwordError = ref('');
 const passwordForm = reactive({ current: '', next: '' });
@@ -1111,13 +1146,14 @@ function resetCharacterForm() {
   characterForm.scenario = '';
   characterForm.firstMessage = '';
   characterForm.exampleDialogue = '';
+  showCharacterEditor.value = false;
 }
 
 function editCharacter(characterId: string) {
   const character = chatStore.characters.find((c) => c.id === characterId);
   if (!character) return;
   editingCharacterId.value = character.id;
-  characterPanelOpen.value = true;
+  showCharacterEditor.value = true;
   characterForm.name = character.name;
   characterForm.description = character.description;
   characterForm.personality = character.personality;
@@ -1190,6 +1226,7 @@ function resetPresetForm() {
   presetForm.contextLength = 131072;
   presetForm.thinkingBudgetTokens = null;
   presetForm.stopStrings = [];
+  showPresetEditor.value = false;
 }
 
 function updateThinkingBudget(event: Event) {
@@ -1215,7 +1252,7 @@ function editPreset(presetId: string) {
   const preset = chatStore.presets.find((p) => p.id === presetId);
   if (!preset) return;
   editingPresetId.value = preset.id;
-  presetPanelOpen.value = true;
+  showPresetEditor.value = true;
   presetForm.name = preset.name;
   presetForm.systemPrompt = preset.systemPrompt;
   presetForm.instructTemplate = preset.instructTemplate ? cloneTemplate(preset.instructTemplate) : null;
@@ -1256,7 +1293,6 @@ async function importPresetTemplate(event: Event) {
   const preset = await chatStore.importPresetTemplate(file, editingPresetId.value ?? undefined);
 
   editingPresetId.value = preset.id;
-  presetPanelOpen.value = true;
   editPreset(preset.id);
   input.value = '';
 }
