@@ -22,6 +22,7 @@ import {
   UpdateProviderConfigInputSchema,
 } from '@forward/shared';
 import type { Character, Chat, Preset, ProviderConfig } from '@forward/shared';
+import type { ProviderChunk } from '@forward/provider-core';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
@@ -49,6 +50,73 @@ async function writeStreamEvent(
     data: JSON.stringify(validatedEvent),
     event: validatedEvent.type,
   });
+}
+
+async function forwardAssistantStream(
+  stream: Parameters<typeof streamSSE>[1] extends (stream: infer T) => Promise<void> ? T : never,
+  dependencies: AppDependencies,
+  chatId: string,
+  messageId: string,
+  chunks: AsyncIterable<ProviderChunk>,
+): Promise<void> {
+  let completed = false;
+
+  await writeStreamEvent(stream, {
+    chatId,
+    messageId,
+    type: 'response.started',
+  });
+
+  try {
+    for await (const chunk of chunks) {
+      if (chunk.kind === 'reasoning' && chunk.text) {
+        await dependencies.messages.appendReasoning(messageId, chunk.text);
+        await writeStreamEvent(stream, {
+          chatId,
+          messageId,
+          text: chunk.text,
+          type: 'reasoning.delta',
+        });
+      }
+
+      if (chunk.kind === 'content' && chunk.text) {
+        await dependencies.messages.appendContent(messageId, chunk.text);
+        await writeStreamEvent(stream, {
+          chatId,
+          messageId,
+          text: chunk.text,
+          type: 'content.delta',
+        });
+      }
+
+      if (chunk.kind === 'done' && !completed) {
+        completed = true;
+        await dependencies.messages.updateState(messageId, 'completed');
+        await writeStreamEvent(stream, {
+          chatId,
+          messageId,
+          type: 'response.completed',
+        });
+      }
+    }
+
+    if (!completed) {
+      await dependencies.messages.updateState(messageId, 'completed');
+      await writeStreamEvent(stream, {
+        chatId,
+        messageId,
+        type: 'response.completed',
+      });
+    }
+  } catch (error) {
+    await dependencies.messages.updateState(messageId, 'failed');
+    await writeStreamEvent(stream, {
+      chatId,
+      error: error instanceof Error ? error.message : 'Unknown provider error',
+      messageId,
+      type: 'response.error',
+    });
+  }
 }
 
 function isAllowedOrigin(origin: string | undefined, configuredOrigin: string): string | null {
@@ -622,69 +690,16 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       });
       const adapter = dependencies.createProviderAdapter(providerConfig);
 
-      return streamSSE(c, async (stream) => {
-        let completed = false;
-
-        await writeStreamEvent(stream, {
-          chatId: chat.id,
-          messageId: assistantMessage.id,
-          type: 'response.started',
-        });
-
-        try {
-          for await (const chunk of adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
-            maxOutputTokens: request.maxOutputTokens,
-            temperature: request.temperature,
-          }))) {
-            if (chunk.kind === 'reasoning' && chunk.text) {
-              await dependencies.messages.appendReasoning(assistantMessage.id, chunk.text);
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: assistantMessage.id,
-                text: chunk.text,
-                type: 'reasoning.delta',
-              });
-            }
-
-            if (chunk.kind === 'content' && chunk.text) {
-              await dependencies.messages.appendContent(assistantMessage.id, chunk.text);
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: assistantMessage.id,
-                text: chunk.text,
-                type: 'content.delta',
-              });
-            }
-
-            if (chunk.kind === 'done' && !completed) {
-              completed = true;
-              await dependencies.messages.updateState(assistantMessage.id, 'completed');
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: assistantMessage.id,
-                type: 'response.completed',
-              });
-            }
-          }
-
-          if (!completed) {
-            await dependencies.messages.updateState(assistantMessage.id, 'completed');
-            await writeStreamEvent(stream, {
-              chatId: chat.id,
-              messageId: assistantMessage.id,
-              type: 'response.completed',
-            });
-          }
-        } catch (error) {
-          await dependencies.messages.updateState(assistantMessage.id, 'failed');
-          await writeStreamEvent(stream, {
-            chatId: chat.id,
-            error: error instanceof Error ? error.message : 'Unknown provider error',
-            messageId: assistantMessage.id,
-            type: 'response.error',
-          });
-        }
-      });
+      return streamSSE(c, async (stream) => forwardAssistantStream(
+        stream,
+        dependencies,
+        chat.id,
+        assistantMessage.id,
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+          maxOutputTokens: request.maxOutputTokens,
+          temperature: request.temperature,
+        })),
+      ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
         return c.json({ error: error.message }, 404);
@@ -758,69 +773,16 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       await dependencies.messages.setActiveAttempt(assistantMessage.id);
       const adapter = dependencies.createProviderAdapter(providerConfig);
 
-      return streamSSE(c, async (stream) => {
-        let completed = false;
-
-        await writeStreamEvent(stream, {
-          chatId: chat.id,
-          messageId: assistantMessage.id,
-          type: 'response.started',
-        });
-
-        try {
-          for await (const chunk of adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
-            maxOutputTokens: request.maxOutputTokens,
-            temperature: request.temperature,
-          }))) {
-            if (chunk.kind === 'reasoning' && chunk.text) {
-              await dependencies.messages.appendReasoning(assistantMessage.id, chunk.text);
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: assistantMessage.id,
-                text: chunk.text,
-                type: 'reasoning.delta',
-              });
-            }
-
-            if (chunk.kind === 'content' && chunk.text) {
-              await dependencies.messages.appendContent(assistantMessage.id, chunk.text);
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: assistantMessage.id,
-                text: chunk.text,
-                type: 'content.delta',
-              });
-            }
-
-            if (chunk.kind === 'done' && !completed) {
-              completed = true;
-              await dependencies.messages.updateState(assistantMessage.id, 'completed');
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: assistantMessage.id,
-                type: 'response.completed',
-              });
-            }
-          }
-
-          if (!completed) {
-            await dependencies.messages.updateState(assistantMessage.id, 'completed');
-            await writeStreamEvent(stream, {
-              chatId: chat.id,
-              messageId: assistantMessage.id,
-              type: 'response.completed',
-            });
-          }
-        } catch (error) {
-          await dependencies.messages.updateState(assistantMessage.id, 'failed');
-          await writeStreamEvent(stream, {
-            chatId: chat.id,
-            error: error instanceof Error ? error.message : 'Unknown provider error',
-            messageId: assistantMessage.id,
-            type: 'response.error',
-          });
-        }
-      });
+      return streamSSE(c, async (stream) => forwardAssistantStream(
+        stream,
+        dependencies,
+        chat.id,
+        assistantMessage.id,
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+          maxOutputTokens: request.maxOutputTokens,
+          temperature: request.temperature,
+        })),
+      ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
         return c.json({ error: error.message }, 404);
@@ -879,69 +841,16 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       await dependencies.messages.updateState(lastMessage.id, 'streaming');
       const adapter = dependencies.createProviderAdapter(providerConfig);
 
-      return streamSSE(c, async (stream) => {
-        let completed = false;
-
-        await writeStreamEvent(stream, {
-          chatId: chat.id,
-          messageId: lastMessage.id,
-          type: 'response.started',
-        });
-
-        try {
-          for await (const chunk of adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
-            maxOutputTokens: request.maxOutputTokens,
-            temperature: request.temperature,
-          }))) {
-            if (chunk.kind === 'reasoning' && chunk.text) {
-              await dependencies.messages.appendReasoning(lastMessage.id, chunk.text);
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: lastMessage.id,
-                text: chunk.text,
-                type: 'reasoning.delta',
-              });
-            }
-
-            if (chunk.kind === 'content' && chunk.text) {
-              await dependencies.messages.appendContent(lastMessage.id, chunk.text);
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: lastMessage.id,
-                text: chunk.text,
-                type: 'content.delta',
-              });
-            }
-
-            if (chunk.kind === 'done' && !completed) {
-              completed = true;
-              await dependencies.messages.updateState(lastMessage.id, 'completed');
-              await writeStreamEvent(stream, {
-                chatId: chat.id,
-                messageId: lastMessage.id,
-                type: 'response.completed',
-              });
-            }
-          }
-
-          if (!completed) {
-            await dependencies.messages.updateState(lastMessage.id, 'completed');
-            await writeStreamEvent(stream, {
-              chatId: chat.id,
-              messageId: lastMessage.id,
-              type: 'response.completed',
-            });
-          }
-        } catch (error) {
-          await dependencies.messages.updateState(lastMessage.id, 'failed');
-          await writeStreamEvent(stream, {
-            chatId: chat.id,
-            error: error instanceof Error ? error.message : 'Unknown provider error',
-            messageId: lastMessage.id,
-            type: 'response.error',
-          });
-        }
-      });
+      return streamSSE(c, async (stream) => forwardAssistantStream(
+        stream,
+        dependencies,
+        chat.id,
+        lastMessage.id,
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+          maxOutputTokens: request.maxOutputTokens,
+          temperature: request.temperature,
+        })),
+      ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
         return c.json({ error: error.message }, 404);

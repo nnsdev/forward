@@ -183,12 +183,13 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
   const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
 
   const activeMessages = getActiveConversationMessages(input.messages);
+  const normalizedMessageModeHistory = normalizeMessageModeHistory(mergedSystemPrompt, activeMessages);
   const initialMessages = input.preset.instructTemplate
     ? [...activeMessages]
-    : normalizeMessageModeHistory(mergedSystemPrompt, activeMessages).messages;
+    : normalizedMessageModeHistory.messages;
   const systemPrompt = input.preset.instructTemplate
     ? mergedSystemPrompt
-    : normalizeMessageModeHistory(mergedSystemPrompt, activeMessages).systemPrompt;
+    : normalizedMessageModeHistory.systemPrompt;
   const preservedMessages = [...initialMessages];
   const droppedMessageIds: string[] = [];
 
