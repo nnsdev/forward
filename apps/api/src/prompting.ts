@@ -7,6 +7,7 @@ const DEFAULT_MAX_PROMPT_TOKENS = 131072;
 
 interface BuildPromptInput {
   authorNote?: string;
+  authorNoteDepth?: number;
   character: Character | null;
   chatId: string;
   config: AppConfig;
@@ -17,11 +18,28 @@ interface BuildPromptInput {
   settings: AppSettings;
 }
 
+function resolveMacros(text: string, characterName: string, userName: string): string {
+  return text
+    .replace(/\{\{char\}\}/g, characterName)
+    .replace(/\{\{user\}\}/g, userName);
+}
+
 function compactSections(parts: Array<string | undefined>): string {
   return parts
     .map((part) => part?.trim())
     .filter(Boolean)
     .join('\n\n');
+}
+
+function resolveMacrosInCharacter(character: Character, userName: string): Character {
+  return {
+    ...character,
+    description: resolveMacros(character.description, character.name, userName),
+    exampleDialogue: resolveMacros(character.exampleDialogue, character.name, userName),
+    firstMessage: resolveMacros(character.firstMessage, character.name, userName),
+    personality: resolveMacros(character.personality, character.name, userName),
+    scenario: resolveMacros(character.scenario, character.name, userName),
+  };
 }
 
 function buildCharacterSystemPrompt(character: Character, systemPromptOverride: string): string {
@@ -189,13 +207,29 @@ function formatMessage(template: InstructTemplate, role: 'system' | 'user' | 'as
 
 export async function buildPromptPreview(input: BuildPromptInput): Promise<PromptPreview> {
   const template = resolveTemplate(input.preset);
-  const baseSystemPrompt = input.character
-    ? buildCharacterSystemPrompt(input.character, input.preset.systemPrompt)
-    : (input.preset.systemPrompt || input.config.defaultAssistantSystemPrompt);
+  const characterName = input.character?.name ?? 'Assistant';
+  const userName = input.settings.personaName.trim() || 'User';
+
+  const resolvedCharacter = input.character
+    ? resolveMacrosInCharacter(input.character, userName)
+    : null;
+  const resolvedAuthorNote = input.authorNote?.trim()
+    ? resolveMacros(input.authorNote.trim(), characterName, userName)
+    : undefined;
+  const resolvedPresetSystemPrompt = input.preset.systemPrompt
+    ? resolveMacros(input.preset.systemPrompt, characterName, userName)
+    : '';
+
+  const baseSystemPrompt = resolvedCharacter
+    ? buildCharacterSystemPrompt(resolvedCharacter, resolvedPresetSystemPrompt)
+    : (resolvedPresetSystemPrompt || input.config.defaultAssistantSystemPrompt);
+
+  const authorNoteDepth = input.authorNoteDepth ?? 0;
+  const shouldInjectAuthorNoteIntoSystem = authorNoteDepth === 0 && resolvedAuthorNote;
   const mergedSystemPrompt = compactSections([
     baseSystemPrompt,
     buildPersonaSection(input.settings),
-    input.authorNote?.trim() ? `Author's note:\n${input.authorNote.trim()}` : undefined,
+    shouldInjectAuthorNoteIntoSystem ? `Author's note:\n${resolvedAuthorNote}` : undefined,
   ]);
 
   const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
@@ -211,11 +245,20 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
   const preservedMessages = [...initialMessages];
   const droppedMessageIds: string[] = [];
 
+  // Insert author's note at configured depth (depth > 0 = N messages from the end)
+  if (authorNoteDepth > 0 && resolvedAuthorNote) {
+    const insertIndex = Math.max(0, preservedMessages.length - authorNoteDepth);
+    preservedMessages.splice(insertIndex, 0, {
+      content: resolvedAuthorNote,
+      role: 'system',
+    } as Message);
+  }
+
   const storyStringContent = input.preset.instructTemplate
-    ? buildStoryString(input.character, mergedSystemPrompt, template, input.settings)
+    ? buildStoryString(resolvedCharacter, mergedSystemPrompt, template, input.settings)
     : systemPrompt;
   const storyString = formatStoryString(template, storyStringContent);
-  const exampleDialogue = buildExampleDialogue(input.character, template);
+  const exampleDialogue = buildExampleDialogue(resolvedCharacter, template);
 
   const promptParts: string[] = [storyString];
 

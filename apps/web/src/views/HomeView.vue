@@ -230,7 +230,7 @@
             {{ authorNoteOpen ? 'Hide' : "Author's note" }}
             <span v-if="chatStore.activeChat?.authorNote" class="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--rp-accent)]" />
           </button>
-          <div v-if="authorNoteOpen" class="mt-1.5">
+          <div v-if="authorNoteOpen" class="mt-1.5 space-y-2">
             <textarea
               v-model="authorNoteDraft"
               class="min-h-16 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white/80 outline-none transition focus:border-[var(--rp-accent)]/35"
@@ -239,6 +239,18 @@
               @blur="saveAuthorNote"
               @keydown.enter.prevent="saveAuthorNote"
             />
+            <div class="flex items-center gap-3">
+              <label class="text-[11px] text-white/40">Depth</label>
+              <input
+                v-model.number="authorNoteDepthDraft"
+                class="w-16 rounded-md border border-white/6 bg-white/[0.02] px-2 py-1 text-xs text-white/80 outline-none transition focus:border-[var(--rp-accent)]/35"
+                min="0"
+                type="number"
+                @blur="saveAuthorNote"
+                @keydown.enter.prevent="saveAuthorNote"
+              />
+              <span class="text-[11px] text-white/25">0 = system prompt, N = N messages from the end</span>
+            </div>
           </div>
         </div>
         <form class="flex items-end gap-3 px-6 py-3 lg:px-10" @submit.prevent="submitMessage">
@@ -845,6 +857,7 @@ import { useSessionStore } from '../stores/session';
 
 const chatStore = useChatStore();
 const authorNoteDraft = ref('');
+const authorNoteDepthDraft = ref(0);
 const authorNoteOpen = ref(false);
 const characterPanelOpen = ref(false);
 const composer = ref('');
@@ -908,13 +921,20 @@ let firstMessageSent = false;
 
 watch(() => chatStore.activeChat?.id, () => {
   authorNoteDraft.value = chatStore.activeChat?.authorNote ?? '';
+  authorNoteDepthDraft.value = chatStore.activeChat?.authorNoteDepth ?? 0;
 });
 
 async function saveAuthorNote() {
   const note = authorNoteDraft.value;
+  const depth = authorNoteDepthDraft.value;
 
-  if (chatStore.activeChat && note !== chatStore.activeChat.authorNote) {
-    await chatStore.updateChatAuthorNote(note);
+  if (chatStore.activeChat) {
+    if (note !== chatStore.activeChat.authorNote) {
+      await chatStore.updateChatAuthorNote(note);
+    }
+    if (depth !== chatStore.activeChat.authorNoteDepth) {
+      await chatStore.updateChatAuthorNoteDepth(depth);
+    }
   }
 }
 

@@ -222,6 +222,7 @@ export const useChatStore = defineStore('chat', {
       const preset = this.activePreset ?? this.presets[0] ?? null;
       const chat = await api.createChat({
         authorNote: '',
+        authorNoteDepth: 0,
         presetId: preset?.id,
         providerConfigId: provider?.id,
         title: `Chat ${this.chats.length + 1}`,
@@ -621,6 +622,15 @@ export const useChatStore = defineStore('chat', {
       }
 
       const updatedChat = await api.updateChat(this.activeChat.id, { authorNote });
+
+      this.chats = this.chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat));
+    },
+    async updateChatAuthorNoteDepth(authorNoteDepth: number) {
+      if (!this.activeChat) {
+        return;
+      }
+
+      const updatedChat = await api.updateChat(this.activeChat.id, { authorNoteDepth });
 
       this.chats = this.chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat));
     },

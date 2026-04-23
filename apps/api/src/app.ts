@@ -280,6 +280,7 @@ const UpdateCharacterRouteSchema = CreateCharacterRouteSchema.partial().extend({
 const UpdateChatRouteSchema = z
   .object({
     authorNote: z.string().optional(),
+    authorNoteDepth: z.number().int().nonnegative().optional(),
     characterId: z.string().min(1).nullable().optional(),
     presetId: z.string().min(1).nullable().optional(),
     providerConfigId: z.string().min(1).nullable().optional(),
@@ -740,6 +741,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const preview = await buildPromptPreview({
         authorNote: chat.authorNote,
+        authorNoteDepth: chat.authorNoteDepth,
         character,
         chatId: chat.id,
         config,
@@ -782,6 +784,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
+        authorNoteDepth: chat.authorNoteDepth,
         character,
         chatId: chat.id,
         config,
@@ -836,6 +839,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
+        authorNoteDepth: chat.authorNoteDepth,
         character,
         chatId: chat.id,
         config,
@@ -918,6 +922,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
+        authorNoteDepth: chat.authorNoteDepth,
         character,
         chatId: chat.id,
         config,
@@ -983,6 +988,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
+        authorNoteDepth: chat.authorNoteDepth,
         character,
         chatId: chat.id,
         config,
