@@ -82,7 +82,7 @@ async function createTestApp() {
         mediaRoot: '/tmp/forward-test-media',
         port: 3000,
         sessionSecret: 'test-session-secret',
-        webOrigin: 'http://127.0.0.1:4173',
+        webOrigins: ['http://127.0.0.1:4173'],
       },
       {
         ...repositories,

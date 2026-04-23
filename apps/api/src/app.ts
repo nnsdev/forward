@@ -119,13 +119,13 @@ async function forwardAssistantStream(
   }
 }
 
-function isAllowedOrigin(origin: string | undefined, configuredOrigin: string): string | null {
+function isAllowedOrigin(origin: string | undefined, configuredOrigins: string[]): string | null {
   if (!origin) {
-    return configuredOrigin;
+    return configuredOrigins[0] ?? null;
   }
 
   const allowedOrigins = new Set([
-    configuredOrigin,
+    ...configuredOrigins,
     'http://127.0.0.1:5173',
     'http://localhost:5173',
     'http://127.0.0.1:4173',
@@ -301,7 +301,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       allowHeaders: ['Content-Type'],
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
-      origin: (origin) => isAllowedOrigin(origin, config.webOrigin) ?? config.webOrigin,
+      origin: (origin) => isAllowedOrigin(origin, config.webOrigins) ?? config.webOrigins[0] ?? '',
     }),
   );
 

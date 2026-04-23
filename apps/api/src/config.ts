@@ -37,7 +37,14 @@ export interface AppConfig {
   mediaRoot: string;
   port: number;
   sessionSecret: string;
-  webOrigin: string;
+  webOrigins: string[];
+}
+
+function parseOrigins(value: string | undefined): string[] {
+  return (value ?? DEFAULT_WEB_ORIGIN)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 export function getAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -69,6 +76,6 @@ export function getAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfig
     mediaRoot: source.MEDIA_ROOT ?? DEFAULT_MEDIA_ROOT,
     port: Number.isFinite(portValue) ? portValue : 3000,
     sessionSecret: source.SESSION_SECRET ?? DEFAULT_SESSION_SECRET,
-    webOrigin: source.WEB_ORIGIN ?? DEFAULT_WEB_ORIGIN,
+    webOrigins: parseOrigins(source.WEB_ORIGIN),
   };
 }

@@ -90,7 +90,7 @@ describe('importCharacterFile', () => {
         mediaRoot,
         port: 3000,
         sessionSecret: 'session-secret',
-        webOrigin: 'http://127.0.0.1:4173',
+        webOrigins: ['http://127.0.0.1:4173'],
       },
       file,
     );
@@ -150,7 +150,7 @@ describe('importCharacterFile', () => {
         mediaRoot,
         port: 3000,
         sessionSecret: 'session-secret',
-        webOrigin: 'http://127.0.0.1:4173',
+        webOrigins: ['http://127.0.0.1:4173'],
       },
       file,
     );

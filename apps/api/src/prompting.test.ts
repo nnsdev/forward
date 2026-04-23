@@ -28,7 +28,7 @@ const baseConfig = {
   mediaRoot: '/tmp/forward-test-media',
   port: 3000,
   sessionSecret: 'session-secret',
-  webOrigin: 'http://127.0.0.1:4173',
+  webOrigins: ['http://127.0.0.1:4173'],
 };
 
 const provider = {
