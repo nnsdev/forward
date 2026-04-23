@@ -74,10 +74,12 @@ describe('CreatePresetInputSchema', () => {
 
     expect(result.contextLength).toBe(131072);
     expect(result.frequencyPenalty).toBe(0);
+    expect(result.instructTemplate).toBeNull();
     expect(result.minP).toBe(0.05);
     expect(result.presencePenalty).toBe(0);
     expect(result.repeatPenalty).toBe(1);
     expect(result.seed).toBeNull();
+    expect(result.systemPrompt).toBe('');
   });
 
   it('accepts all fields explicitly', () => {
@@ -111,6 +113,7 @@ describe('PresetSchema', () => {
       contextLength: 131072,
       frequencyPenalty: 0,
       id: 'preset_test',
+      instructTemplate: null,
       maxOutputTokens: 256,
       minP: 0.05,
       name: 'Test',
@@ -118,6 +121,7 @@ describe('PresetSchema', () => {
       repeatPenalty: 1,
       seed: null,
       stopStrings: [],
+      systemPrompt: '',
       temperature: 0.7,
       topK: 40,
       topP: 0.9,

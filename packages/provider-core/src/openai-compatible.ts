@@ -14,6 +14,7 @@ interface OpenAIChoiceChunk {
     reasoning_content?: string | null;
   };
   finish_reason?: string | null;
+  text?: string | null;
 }
 
 interface OpenAIChatCompletionChunk {
@@ -62,6 +63,13 @@ export function normalizeOpenAIChatCompletionChunk(input: string | OpenAIChatCom
     });
   }
 
+  if (choice.text) {
+    normalized.push({
+      kind: 'content',
+      text: choice.text,
+    });
+  }
+
   if (choice.finish_reason) {
     normalized.push({
       kind: 'done',
@@ -90,6 +98,10 @@ function buildHeaders(apiKey?: string | null): HeadersInit {
 
 function parseModelResponse(payload: OpenAIModelResponse): ProviderModel[] {
   return (payload.data ?? []).map((model) => ({ id: model.id }));
+}
+
+function hasPrompt(input: StreamGenerateInput): input is StreamGenerateInput & { prompt: string } {
+  return typeof (input as { prompt?: unknown }).prompt === 'string';
 }
 
 async function* iterateSseChunks(response: Response): AsyncIterable<ProviderChunk> {
@@ -148,11 +160,62 @@ async function* iterateSseChunks(response: Response): AsyncIterable<ProviderChun
   }
 }
 
-function buildChatCompletionBody(config: ProviderConfig, input: StreamGenerateInput): Record<string, unknown> {
+function buildChatCompletionBody(config: ProviderConfig, input: StreamGenerateInput & { messages: ChatCompletionMessage[] }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     max_tokens: input.maxOutputTokens ?? 128,
     messages: input.messages,
     model: input.model ?? config.model,
+    stream: true,
+  };
+
+  if (input.temperature !== undefined) {
+    body.temperature = input.temperature;
+  }
+
+  if (input.topP !== undefined) {
+    body.top_p = input.topP;
+  }
+
+  if (input.topK !== undefined) {
+    body.top_k = input.topK;
+  }
+
+  if (input.minP !== undefined) {
+    body.min_p = input.minP;
+  }
+
+  if (input.frequencyPenalty !== undefined) {
+    body.frequency_penalty = input.frequencyPenalty;
+  }
+
+  if (input.presencePenalty !== undefined) {
+    body.presence_penalty = input.presencePenalty;
+  }
+
+  if (input.repeatPenalty !== undefined) {
+    body.repeat_penalty = input.repeatPenalty;
+  }
+
+  if (input.seed !== undefined && input.seed !== null) {
+    body.seed = input.seed;
+  }
+
+  if (input.contextLength !== undefined) {
+    body.num_ctx = input.contextLength;
+  }
+
+  if (input.stop?.length) {
+    body.stop = input.stop;
+  }
+
+  return body;
+}
+
+function buildCompletionBody(config: ProviderConfig, input: StreamGenerateInput & { prompt: string }): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    max_tokens: input.maxOutputTokens ?? 128,
+    model: input.model ?? config.model,
+    prompt: input.prompt,
     stream: true,
   };
 
@@ -219,8 +282,18 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
       return parseModelResponse(payload);
     },
     async *streamGenerate(input) {
-      const response = await fetchFn(`${baseUrl}/v1/chat/completions`, {
-        body: JSON.stringify(buildChatCompletionBody(options.config, input)),
+      let endpoint = '/v1/chat/completions';
+      let body: Record<string, unknown>;
+
+      if (hasPrompt(input)) {
+        endpoint = '/v1/completions';
+        body = buildCompletionBody(options.config, input);
+      } else {
+        body = buildChatCompletionBody(options.config, input);
+      }
+
+      const response = await fetchFn(`${baseUrl}${endpoint}`, {
+        body: JSON.stringify(body),
         headers,
         method: 'POST',
       });

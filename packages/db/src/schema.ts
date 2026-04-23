@@ -19,6 +19,8 @@ export const providerConfigs = sqliteTable('provider_configs', {
 export const presets = sqliteTable('presets', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  systemPrompt: text('system_prompt').notNull().default(''),
+  instructTemplateJson: text('instruct_template_json').notNull().default(''),
   temperature: real('temperature').notNull(),
   topP: real('top_p').notNull(),
   topK: integer('top_k').notNull(),
@@ -27,7 +29,7 @@ export const presets = sqliteTable('presets', {
   presencePenalty: real('presence_penalty').notNull().default(0).$type<number>(),
   repeatPenalty: real('repeat_penalty').notNull().default(1).$type<number>(),
   seed: integer('seed').$type<number | null>(),
-  contextLength: integer('context_length').notNull().default(4096).$type<number>(),
+  contextLength: integer('context_length').notNull().default(131072).$type<number>(),
   maxOutputTokens: integer('max_output_tokens').notNull(),
   stopStringsJson: text('stop_strings_json').notNull(),
   ...timestamps,

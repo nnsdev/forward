@@ -25,6 +25,7 @@ async function createTestApp() {
     contextLength: 4096,
     frequencyPenalty: 0,
     id: 'preset_balanced',
+    instructTemplate: null,
     maxOutputTokens: 256,
     minP: 0.05,
     name: 'Balanced',
@@ -32,6 +33,7 @@ async function createTestApp() {
     repeatPenalty: 1,
     seed: null,
     stopStrings: [],
+    systemPrompt: '',
     temperature: 0.7,
     topK: 40,
     topP: 0.9,
@@ -72,6 +74,7 @@ async function createTestApp() {
         defaultPresetRepeatPenalty: 1,
         defaultPresetSeed: null,
         defaultPresetStopStrings: [],
+        defaultPresetSystemPrompt: '',
         defaultPresetTemperature: 0.7,
         defaultPresetTopK: 40,
         defaultPresetTopP: 0.9,
@@ -514,6 +517,78 @@ describe('api app', () => {
     await expect(updateChatResponse.json()).resolves.toMatchObject({
       presetId: createdPreset.id,
     });
+  });
+
+  it('imports SillyTavern instruct and context JSON into a preset', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+    const authHeaders = {
+      cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '',
+    };
+
+    const instructForm = new FormData();
+    instructForm.append(
+      'file',
+      new File(
+        [
+          JSON.stringify({
+            input_sequence: '[INST] ',
+            name: 'Mistral Import',
+            output_suffix: '</s>',
+            story_string_prefix: '[INST] ',
+            story_string_suffix: '[/INST]',
+          }),
+        ],
+        'mistral-instruct.json',
+        { type: 'application/json' },
+      ),
+    );
+
+    const createResponse = await app.request('/presets/import', {
+      body: instructForm,
+      headers: authHeaders,
+      method: 'POST',
+    });
+
+    expect(createResponse.status).toBe(201);
+    const createdPreset = await createResponse.json() as { id: string; instructTemplate: { inputSequence: string; name: string } };
+    expect(createdPreset.instructTemplate.inputSequence).toBe('[INST] ');
+    expect(createdPreset.instructTemplate.name).toBe('Mistral Import');
+
+    const contextForm = new FormData();
+    contextForm.append('presetId', createdPreset.id);
+    contextForm.append(
+      'file',
+      new File(
+        [
+          JSON.stringify({
+            chat_start: 'Roleplay begins.',
+            example_separator: '***',
+            story_string: '{{#if system}}{{system}}\n{{/if}}{{#if description}}{{description}}{{/if}}{{trim}}',
+          }),
+        ],
+        'mistral-context.json',
+        { type: 'application/json' },
+      ),
+    );
+
+    const updateResponse = await app.request('/presets/import', {
+      body: contextForm,
+      headers: authHeaders,
+      method: 'POST',
+    });
+
+    expect(updateResponse.status).toBe(200);
+    const updatedPreset = await updateResponse.json() as { instructTemplate: { chatStart: string; exampleSeparator: string; storyStringTemplate: string } };
+    expect(updatedPreset.instructTemplate.chatStart).toBe('Roleplay begins.');
+    expect(updatedPreset.instructTemplate.exampleSeparator).toBe('***');
+    expect(updatedPreset.instructTemplate.storyStringTemplate).toContain('{{description}}');
   });
 
   it('imports a character and lets a chat preview use it', async () => {

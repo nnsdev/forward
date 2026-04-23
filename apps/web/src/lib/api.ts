@@ -171,6 +171,20 @@ export const api = {
       method: 'POST',
     });
   },
+  async importPresetTemplate(file: File, presetId?: string): Promise<Preset> {
+    const formData = new FormData();
+
+    formData.append('file', file);
+
+    if (presetId) {
+      formData.append('presetId', presetId);
+    }
+
+    return expectJson<Preset>('/presets/import', {
+      body: formData,
+      method: 'POST',
+    });
+  },
   async listCharacters(): Promise<Character[]> {
     return expectJson<Character[]>('/characters');
   },

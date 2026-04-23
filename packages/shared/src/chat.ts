@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { InstructTemplateSchema } from './instruct';
+
 export const MessageRoleSchema = z.enum(['system', 'user', 'assistant']);
 export const MessageStateSchema = z.enum([
   'pending',
@@ -62,6 +64,8 @@ export const UpdateProviderConfigInputSchema = CreateProviderConfigInputSchema.p
 export const PresetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  systemPrompt: z.string(),
+  instructTemplate: InstructTemplateSchema.nullable(),
   temperature: z.number().min(0).max(2),
   topP: z.number().min(0).max(1),
   topK: z.number().int().nonnegative(),
@@ -77,6 +81,8 @@ export const PresetSchema = z.object({
 
 export const CreatePresetInputSchema = z.object({
   name: z.string().min(1),
+  systemPrompt: z.string().default(''),
+  instructTemplate: InstructTemplateSchema.nullable().default(null),
   temperature: z.number().min(0).max(2),
   topP: z.number().min(0).max(1),
   topK: z.number().int().nonnegative(),
@@ -92,6 +98,8 @@ export const CreatePresetInputSchema = z.object({
 
 export const UpdatePresetInputSchema = z.object({
   name: z.string().min(1).optional(),
+  systemPrompt: z.string().optional(),
+  instructTemplate: InstructTemplateSchema.nullable().optional(),
   temperature: z.number().min(0).max(2).optional(),
   topP: z.number().min(0).max(1).optional(),
   topK: z.number().int().nonnegative().optional(),

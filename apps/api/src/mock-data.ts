@@ -29,6 +29,7 @@ export function createMockStreamEvents(chatId = 'chat_foundation', messageId = '
 
 export const mockPromptPreview: PromptPreview = {
   chatId: 'chat_foundation',
+  formattedPrompt: 'You are roleplaying as Artemis.\n\nThe observatory is quiet tonight.\n\nWhat are you watching for?',
   provider: {
     id: 'provider_local',
     model: 'qwen',
@@ -49,6 +50,7 @@ export const mockPromptPreview: PromptPreview = {
     topK: 40,
     topP: 0.9,
   },
+  templateName: 'Plain',
   tokenEstimate: 1264,
   truncation: {
     applied: false,

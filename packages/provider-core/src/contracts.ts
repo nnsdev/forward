@@ -16,11 +16,10 @@ export interface ChatCompletionMessage {
   role: MessageRole;
 }
 
-export interface StreamGenerateInput {
+interface StreamGenerateBaseInput {
   contextLength?: number;
   frequencyPenalty?: number;
   maxOutputTokens?: number;
-  messages: ChatCompletionMessage[];
   minP?: number;
   model?: string;
   presencePenalty?: number;
@@ -31,6 +30,17 @@ export interface StreamGenerateInput {
   topK?: number;
   topP?: number;
 }
+
+export type StreamGenerateInput = StreamGenerateBaseInput & (
+  | {
+      messages: ChatCompletionMessage[];
+      prompt?: never;
+    }
+  | {
+      messages?: never;
+      prompt: string;
+    }
+);
 
 export interface ProviderAdapter {
   listModels(): Promise<ProviderModel[]>;

@@ -255,6 +255,21 @@ export const useChatStore = defineStore('chat', {
 
       return character;
     },
+    async importPresetTemplate(file: File, presetId?: string) {
+      const preset = await api.importPresetTemplate(file, presetId);
+
+      const existingIndex = this.presets.findIndex((entry) => entry.id === preset.id);
+
+      if (existingIndex === -1) {
+        this.presets = [...this.presets, preset].sort((left, right) => left.name.localeCompare(right.name));
+      } else {
+        this.presets = this.presets
+          .map((entry) => (entry.id === preset.id ? preset : entry))
+          .sort((left, right) => left.name.localeCompare(right.name));
+      }
+
+      return preset;
+    },
     async loadMessages(chatId: string) {
       this.messagesByChatId[chatId] = await api.listMessages(chatId);
     },

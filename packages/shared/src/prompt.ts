@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const PromptPreviewSchema = z.object({
   chatId: z.string().min(1),
+  formattedPrompt: z.string(),
   provider: z.object({
     id: z.string().min(1),
     type: z.string().min(1),
@@ -22,6 +23,7 @@ export const PromptPreviewSchema = z.object({
     topK: z.number().int().nonnegative(),
     topP: z.number(),
   }),
+  templateName: z.string(),
   tokenEstimate: z.number().int().nonnegative(),
   truncation: z.object({
     applied: z.boolean(),

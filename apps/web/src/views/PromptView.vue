@@ -27,6 +27,7 @@
             <p class="text-[11px] uppercase tracking-[0.22em] text-white/36">Preset</p>
             <p class="mt-2 text-sm text-white/92">{{ preview.preset.name }}</p>
             <p class="mt-1 text-[11px] leading-5 text-white/35">
+              template {{ preview.templateName }}<br>
               temp {{ preview.preset.temperature }} &middot; top_p {{ preview.preset.topP }} &middot; top_k {{ preview.preset.topK }} &middot; min_p {{ preview.preset.minP }}<br>
               ctx {{ preview.preset.contextLength }} &middot; max {{ preview.preset.maxOutputTokens }} &middot; rep {{ preview.preset.repeatPenalty }} &middot; freq {{ preview.preset.frequencyPenalty }} &middot; pres {{ preview.preset.presencePenalty }}<br>
               <template v-if="preview.preset.seed !== null">seed {{ preview.preset.seed }}</template><template v-else>seed random</template>
@@ -47,6 +48,11 @@
           <p class="mt-2 leading-6">
             {{ preview.truncation.applied ? `Applied. Dropped ${preview.truncation.droppedMessageIds.length} older message(s) to fit the prompt budget.` : 'Not applied. Full message history fit within the current prompt budget.' }}
           </p>
+        </article>
+
+        <article class="mt-4 rounded-2xl border border-white/7 bg-black/12 p-4">
+          <p class="text-[11px] uppercase tracking-[0.22em] text-white/36">Formatted Prompt</p>
+          <pre class="mt-3 whitespace-pre-wrap text-xs leading-6 text-white/72">{{ preview.formattedPrompt }}</pre>
         </article>
 
         <div class="mt-6 space-y-3">

@@ -30,6 +30,7 @@ export interface AppConfig {
   defaultPresetRepeatPenalty: number;
   defaultPresetSeed: number | null;
   defaultPresetStopStrings: string[];
+  defaultPresetSystemPrompt: string;
   defaultPresetTemperature: number;
   defaultPresetTopK: number;
   defaultPresetTopP: number;
@@ -60,6 +61,7 @@ export function getAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfig
     defaultPresetPresencePenalty: Number(source.DEFAULT_PRESET_PRESENCE_PENALTY ?? '0'),
     defaultPresetRepeatPenalty: Number(source.DEFAULT_PRESET_REPEAT_PENALTY ?? '1'),
     defaultPresetSeed: source.DEFAULT_PRESET_SEED ? Number(source.DEFAULT_PRESET_SEED) : null,
+    defaultPresetSystemPrompt: source.DEFAULT_PRESET_SYSTEM_PROMPT ?? '',
     defaultPresetStopStrings: source.DEFAULT_PRESET_STOP_STRINGS ? source.DEFAULT_PRESET_STOP_STRINGS.split(',').map((value) => value.trim()).filter(Boolean) : [],
     defaultPresetTemperature: Number(source.DEFAULT_PRESET_TEMPERATURE ?? '0.7'),
     defaultPresetTopK: Number(source.DEFAULT_PRESET_TOP_K ?? '40'),

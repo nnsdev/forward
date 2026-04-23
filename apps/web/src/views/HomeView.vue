@@ -367,6 +367,33 @@
               class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
               placeholder="Preset name"
             />
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Template</label>
+              <select
+                v-model="selectedTemplateName"
+                class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                @change="applySelectedTemplate"
+              >
+                <option value="Chat messages">Chat messages</option>
+                <option
+                  v-if="selectedTemplateName !== 'Chat messages' && !BUILT_IN_TEMPLATES.some((template) => template.name === selectedTemplateName)"
+                  :value="selectedTemplateName"
+                >
+                  {{ selectedTemplateName }} (Imported)
+                </option>
+                <option v-for="template in BUILT_IN_TEMPLATES" :key="template.name" :value="template.name">
+                  {{ template.name }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">System prompt</label>
+              <textarea
+                v-model="presetForm.systemPrompt"
+                class="min-h-28 w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                placeholder="Optional system prompt override"
+              />
+            </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Temperature</label>
@@ -480,6 +507,13 @@
                 {{ editingPresetId ? 'Save' : 'Create' }}
               </button>
               <button
+                class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/45 transition hover:text-white/70"
+                type="button"
+                @click="presetImportInputRef?.click()"
+              >
+                Import ST JSON
+              </button>
+              <button
                 v-if="editingPresetId"
                 class="rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/35 transition hover:text-white/60"
                 type="button"
@@ -488,6 +522,7 @@
                 Cancel
               </button>
             </div>
+            <input ref="presetImportInputRef" class="hidden" type="file" accept="application/json,.json" @change="importPresetTemplate" />
           </form>
 
           <div class="space-y-1">
@@ -515,12 +550,15 @@
                   </button>
                 </div>
               </div>
-<p class="mt-0.5 text-[11px] text-white/25">
+              <p class="mt-0.5 text-[11px] text-white/25">
                   temp {{ preset.temperature }} &middot; max {{ preset.maxOutputTokens }} &middot; ctx {{ preset.contextLength }} &middot; top_p {{ preset.topP }} &middot; top_k {{ preset.topK }} &middot; min_p {{ preset.minP }}
                 </p>
+                <p class="text-[11px] text-white/20">
+                  {{ preset.instructTemplate?.name ?? 'Chat messages' }}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
       </div>
     </aside>
 
@@ -684,7 +722,8 @@
 </template>
 
 <script setup lang="ts">
-import type { CreateCharacterInput, CreatePresetInput, CreateProviderConfigInput } from '@forward/shared';
+import type { CreateCharacterInput, CreatePresetInput, CreateProviderConfigInput, InstructTemplate } from '@forward/shared';
+import { BUILT_IN_TEMPLATES } from '@forward/shared';
 import { reactive, onMounted, ref, computed, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -702,6 +741,7 @@ const deleteTargetChatId = ref<string | null>(null);
 const editingCharacterId = ref<string | null>(null);
 const editingPresetId = ref<string | null>(null);
 const editingProviderId = ref<string | null>(null);
+const presetImportInputRef = ref<HTMLInputElement | null>(null);
 const presetPanelOpen = ref(false);
 const providerPanelOpen = ref(false);
 const renameInputRef = ref<HTMLInputElement | null>(null);
@@ -724,6 +764,7 @@ const characterForm = reactive<CreateCharacterInput>({
 const presetForm = reactive<CreatePresetInput>({
   contextLength: 131072,
   frequencyPenalty: 0,
+  instructTemplate: null,
   maxOutputTokens: 256,
   minP: 0.05,
   name: '',
@@ -731,6 +772,7 @@ const presetForm = reactive<CreatePresetInput>({
   repeatPenalty: 1,
   seed: null,
   stopStrings: [],
+  systemPrompt: '',
   temperature: 0.7,
   topK: 40,
   topP: 0.9,
@@ -744,6 +786,7 @@ const providerForm = reactive<CreateProviderConfigInput>({
   reasoningEnabled: false,
 });
 const providerModels = ref<Record<string, Array<{ id: string }>>>({});
+const selectedTemplateName = ref<string>('Chat messages');
 const router = useRouter();
 const sessionStore = useSessionStore();
 let firstMessageSent = false;
@@ -898,6 +941,9 @@ async function removeCharacter(characterId: string) {
 function resetPresetForm() {
   editingPresetId.value = null;
   presetForm.name = '';
+  presetForm.systemPrompt = '';
+  presetForm.instructTemplate = null;
+  selectedTemplateName.value = 'Chat messages';
   presetForm.temperature = 0.7;
   presetForm.maxOutputTokens = 256;
   presetForm.topP = 0.9;
@@ -907,8 +953,22 @@ function resetPresetForm() {
   presetForm.presencePenalty = 0;
   presetForm.repeatPenalty = 1;
   presetForm.seed = null;
-  presetForm.contextLength = 4096;
+  presetForm.contextLength = 131072;
   presetForm.stopStrings = [];
+}
+
+function cloneTemplate(template: InstructTemplate): InstructTemplate {
+  return { ...template };
+}
+
+function applySelectedTemplate() {
+  if (selectedTemplateName.value === 'Chat messages') {
+    presetForm.instructTemplate = null;
+    return;
+  }
+
+  const template = BUILT_IN_TEMPLATES.find((entry) => entry.name === selectedTemplateName.value);
+  presetForm.instructTemplate = template ? cloneTemplate(template) : null;
 }
 
 function editPreset(presetId: string) {
@@ -917,6 +977,9 @@ function editPreset(presetId: string) {
   editingPresetId.value = preset.id;
   presetPanelOpen.value = true;
   presetForm.name = preset.name;
+  presetForm.systemPrompt = preset.systemPrompt;
+  presetForm.instructTemplate = preset.instructTemplate ? cloneTemplate(preset.instructTemplate) : null;
+  selectedTemplateName.value = preset.instructTemplate?.name ?? 'Chat messages';
   presetForm.temperature = preset.temperature;
   presetForm.maxOutputTokens = preset.maxOutputTokens;
   presetForm.topP = preset.topP;
@@ -939,6 +1002,22 @@ async function savePreset() {
     await chatStore.createPreset(payload);
   }
   resetPresetForm();
+}
+
+async function importPresetTemplate(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  const preset = await chatStore.importPresetTemplate(file, editingPresetId.value ?? undefined);
+
+  editingPresetId.value = preset.id;
+  presetPanelOpen.value = true;
+  editPreset(preset.id);
+  input.value = '';
 }
 
 async function assignPreset(presetId: string) {

@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS provider_configs (
 CREATE TABLE IF NOT EXISTS presets (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  system_prompt TEXT NOT NULL DEFAULT '',
+  instruct_template_json TEXT NOT NULL DEFAULT '',
   temperature REAL NOT NULL,
   top_p REAL NOT NULL,
   top_k INTEGER NOT NULL,
@@ -93,6 +95,8 @@ const MIGRATIONS: Array<{ column: string; sql: string; table: string }> = [
   { column: 'repeat_penalty', sql: 'ALTER TABLE presets ADD COLUMN repeat_penalty REAL NOT NULL DEFAULT 1', table: 'presets' },
   { column: 'seed', sql: 'ALTER TABLE presets ADD COLUMN seed INTEGER', table: 'presets' },
   { column: 'context_length', sql: 'ALTER TABLE presets ADD COLUMN context_length INTEGER NOT NULL DEFAULT 131072', table: 'presets' },
+  { column: 'system_prompt', sql: 'ALTER TABLE presets ADD COLUMN system_prompt TEXT NOT NULL DEFAULT \'\'', table: 'presets' },
+  { column: 'instruct_template_json', sql: 'ALTER TABLE presets ADD COLUMN instruct_template_json TEXT NOT NULL DEFAULT \'\'', table: 'presets' },
 ];
 
 function getColumnNames(sqlite: DatabaseSync, table: string): Set<string> {

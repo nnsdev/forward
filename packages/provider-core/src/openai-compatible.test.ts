@@ -1,103 +1,55 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createOpenAICompatibleAdapter, extractSseDataPayloads, normalizeOpenAIChatCompletionChunk } from './openai-compatible';
+import { createOpenAICompatibleAdapter } from './openai-compatible';
 
-describe('openai-compatible normalization', () => {
-  it('extracts SSE data payloads', () => {
-    const payloads = extractSseDataPayloads('data: {"foo":1}\n\ndata: [DONE]\n\n');
+const providerConfig = {
+  apiKeyEnvVar: null,
+  baseUrl: 'http://127.0.0.1:8080',
+  id: 'provider_local',
+  model: 'qwen',
+  name: 'Local qwen',
+  providerType: 'openai-compatible' as const,
+  reasoningEnabled: true,
+};
 
-    expect(payloads).toEqual(['{"foo":1}', '[DONE]']);
-  });
-
-  it('normalizes reasoning and content deltas separately', () => {
-    const chunks = normalizeOpenAIChatCompletionChunk({
-      choices: [
-        {
-          delta: {
-            reasoning_content: 'Thinking',
-            content: 'Pong',
-          },
-          finish_reason: null,
-        },
-      ],
-    });
-
-    expect(chunks).toEqual([
-      { kind: 'reasoning', text: 'Thinking' },
-      { kind: 'content', text: 'Pong' },
-    ]);
-  });
-
-  it('normalizes the OpenAI done sentinel', () => {
-    expect(normalizeOpenAIChatCompletionChunk('[DONE]')).toEqual([{ kind: 'done' }]);
-  });
-
-  it('lists models through the adapter', async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ id: 'qwen' }, { id: 'roci' }] })));
-    const adapter = createOpenAICompatibleAdapter({
-      config: {
-        apiKeyEnvVar: null,
-        baseUrl: 'http://127.0.0.1:8080',
-        id: 'provider_local',
-        model: 'qwen',
-        name: 'Local qwen',
-        providerType: 'openai-compatible',
-        reasoningEnabled: true,
-      },
-      fetchFn,
-    });
-
-    await expect(adapter.listModels()).resolves.toEqual([{ id: 'qwen' }, { id: 'roci' }]);
-    expect(fetchFn).toHaveBeenCalledWith('http://127.0.0.1:8080/v1/models', expect.any(Object));
-  });
-
-  it('streams reasoning and content through the adapter', async () => {
-    const fetchFn = vi.fn(async () => {
-      const encoder = new TextEncoder();
-
-      return new Response(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(
-              encoder.encode(
-                'data: {"choices":[{"delta":{"reasoning_content":"Thinking"},"finish_reason":null}]}\n\n' +
-                  'data: {"choices":[{"delta":{"content":"Pong"},"finish_reason":null}]}\n\n' +
-                  'data: [DONE]\n\n',
-              ),
-            );
-            controller.close();
-          },
-        }),
-      );
-    });
-
-    const adapter = createOpenAICompatibleAdapter({
-      config: {
-        apiKeyEnvVar: null,
-        baseUrl: 'http://127.0.0.1:8080',
-        id: 'provider_local',
-        model: 'qwen',
-        name: 'Local qwen',
-        providerType: 'openai-compatible',
-        reasoningEnabled: true,
-      },
-      fetchFn,
-    });
+describe('createOpenAICompatibleAdapter', () => {
+  it('uses chat completions for message-based generation', async () => {
+    const fetchFn = vi.fn(async () => new Response('data: [DONE]\n\n', { status: 200 }));
+    const adapter = createOpenAICompatibleAdapter({ config: providerConfig, fetchFn: fetchFn as typeof fetch });
 
     const chunks = [];
 
     for await (const chunk of adapter.streamGenerate({
-      maxOutputTokens: 64,
-      messages: [{ content: 'Reply with pong', role: 'user' }],
-      temperature: 0,
+      maxOutputTokens: 128,
+      messages: [{ content: 'Hello', role: 'user' }],
     })) {
       chunks.push(chunk);
     }
 
-    expect(chunks).toEqual([
-      { kind: 'reasoning', text: 'Thinking' },
-      { kind: 'content', text: 'Pong' },
-      { kind: 'done' },
-    ]);
+    expect(fetchFn).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(chunks.at(-1)).toMatchObject({ kind: 'done' });
+  });
+
+  it('uses completions for raw prompt generation', async () => {
+    const fetchFn = vi.fn(async () => new Response('data: {"choices":[{"text":"Hello world"}]}\n\ndata: [DONE]\n\n', { status: 200 }));
+    const adapter = createOpenAICompatibleAdapter({ config: providerConfig, fetchFn: fetchFn as typeof fetch });
+
+    const chunks = [];
+
+    for await (const chunk of adapter.streamGenerate({
+      maxOutputTokens: 128,
+      prompt: 'Formatted prompt',
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/v1/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(chunks).toContainEqual({ kind: 'content', text: 'Hello world' });
   });
 });

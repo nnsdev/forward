@@ -33,6 +33,7 @@ import { clearSessionCookie, isAuthenticated, issueSessionCookie, requireAuth } 
 import { importCharacterFile } from './character-import';
 import type { AppConfig } from './config';
 import { createMockStreamEvents, mockPromptPreview } from './mock-data';
+import { importPresetTemplateFile } from './preset-import';
 import { buildPromptPreview } from './prompting';
 import type { AppDependencies } from './runtime';
 
@@ -159,6 +160,41 @@ async function resolvePreset(
   }
 
   return (await dependencies.presets.list())[0] ?? null;
+}
+
+function buildGenerationInput(
+  promptPreview: ReturnType<typeof buildPromptPreview>,
+  preset: Preset,
+  providerConfig: ProviderConfig,
+  overrides: {
+    maxOutputTokens?: number;
+    temperature?: number;
+  },
+) {
+  const baseInput = {
+    contextLength: preset.contextLength,
+    frequencyPenalty: preset.frequencyPenalty,
+    maxOutputTokens: overrides.maxOutputTokens ?? preset.maxOutputTokens,
+    minP: preset.minP,
+    model: providerConfig.model,
+    presencePenalty: preset.presencePenalty,
+    repeatPenalty: preset.repeatPenalty,
+    seed: preset.seed,
+    stop: preset.stopStrings,
+    temperature: overrides.temperature ?? preset.temperature,
+    topK: preset.topK,
+    topP: preset.topP,
+  };
+
+  return preset.instructTemplate
+    ? {
+        ...baseInput,
+        prompt: promptPreview.formattedPrompt,
+      }
+    : {
+        ...baseInput,
+        messages: promptPreview.messages,
+      };
 }
 
 export function createApp(config: AppConfig, dependencies: AppDependencies) {
@@ -347,6 +383,45 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.json(preset, 201);
   });
 
+  app.post('/presets/import', async (c) => {
+    const formData = await c.req.formData();
+    const file = formData.get('file');
+    const presetId = formData.get('presetId');
+
+    if (!(file instanceof File)) {
+      return c.json({ error: 'Import file is required' }, 400);
+    }
+
+    const existingPreset = typeof presetId === 'string' && presetId
+      ? await dependencies.presets.getById(presetId)
+      : null;
+
+    if (typeof presetId === 'string' && presetId && !existingPreset) {
+      return c.json({ error: 'Preset not found' }, 404);
+    }
+
+    const basePreset = existingPreset ?? (await dependencies.presets.list())[0] ?? null;
+
+    try {
+      const input = await importPresetTemplateFile(config, file, existingPreset ?? null);
+
+      if (existingPreset && typeof presetId === 'string') {
+        const preset = await dependencies.presets.update(presetId, input);
+        return c.json(preset);
+      }
+
+      const createInput = {
+        ...(basePreset ?? {}),
+        ...input,
+      };
+      const preset = await dependencies.presets.create(CreatePresetInputSchema.parse(createInput));
+
+      return c.json(preset, 201);
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : 'Failed to import preset template' }, 400);
+    }
+  });
+
   app.patch('/presets/:presetId', async (c) => {
     const input = UpdatePresetRouteSchema.parse(await c.req.json());
     const preset = await dependencies.presets.update(c.req.param('presetId'), input);
@@ -497,21 +572,10 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         });
 
         try {
-          for await (const chunk of adapter.streamGenerate({
-            contextLength: preset.contextLength,
-            frequencyPenalty: preset.frequencyPenalty,
-            maxOutputTokens: request.maxOutputTokens ?? preset.maxOutputTokens,
-            messages: promptPreview.messages,
-            minP: preset.minP,
-            model: providerConfig.model,
-            presencePenalty: preset.presencePenalty,
-            repeatPenalty: preset.repeatPenalty,
-            seed: preset.seed,
-            stop: preset.stopStrings,
-            temperature: request.temperature ?? preset.temperature,
-            topK: preset.topK,
-            topP: preset.topP,
-          })) {
+          for await (const chunk of adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+            maxOutputTokens: request.maxOutputTokens,
+            temperature: request.temperature,
+          }))) {
             if (chunk.kind === 'reasoning' && chunk.text) {
               await dependencies.messages.appendReasoning(assistantMessage.id, chunk.text);
               await writeStreamEvent(stream, {
@@ -631,21 +695,10 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         });
 
         try {
-          for await (const chunk of adapter.streamGenerate({
-            contextLength: preset.contextLength,
-            frequencyPenalty: preset.frequencyPenalty,
-            maxOutputTokens: request.maxOutputTokens ?? preset.maxOutputTokens,
-            messages: promptPreview.messages,
-            minP: preset.minP,
-            model: providerConfig.model,
-            presencePenalty: preset.presencePenalty,
-            repeatPenalty: preset.repeatPenalty,
-            seed: preset.seed,
-            stop: preset.stopStrings,
-            temperature: request.temperature ?? preset.temperature,
-            topK: preset.topK,
-            topP: preset.topP,
-          })) {
+          for await (const chunk of adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+            maxOutputTokens: request.maxOutputTokens,
+            temperature: request.temperature,
+          }))) {
             if (chunk.kind === 'reasoning' && chunk.text) {
               await dependencies.messages.appendReasoning(assistantMessage.id, chunk.text);
               await writeStreamEvent(stream, {
