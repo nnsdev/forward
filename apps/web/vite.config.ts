@@ -12,6 +12,7 @@ export default defineConfig({
       '/chats': 'http://127.0.0.1:3000',
       '/debug': 'http://127.0.0.1:3000',
       '/health': 'http://127.0.0.1:3000',
+      '/media': 'http://127.0.0.1:3000',
       '/presets': 'http://127.0.0.1:3000',
       '/providers': 'http://127.0.0.1:3000',
     },
