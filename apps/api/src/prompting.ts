@@ -199,7 +199,7 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
   const droppedMessageIds: string[] = [];
 
   const storyStringContent = input.preset.instructTemplate
-    ? buildStoryString(input.character, input.preset.systemPrompt || input.config.defaultAssistantSystemPrompt, template, input.settings)
+    ? buildStoryString(input.character, mergedSystemPrompt, template, input.settings)
     : systemPrompt;
   const storyString = formatStoryString(template, storyStringContent);
   const exampleDialogue = buildExampleDialogue(input.character, template);
