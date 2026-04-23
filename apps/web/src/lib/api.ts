@@ -157,6 +157,15 @@ export const api = {
 
     await readSseStream(response, onEvent, signal);
   },
+  async continueChat(chatId: string, input: RetryChatInput, onEvent: (event: NormalizedStreamEvent) => void, signal?: AbortSignal): Promise<void> {
+    const response = await request(`/chats/${chatId}/continue`, {
+      body: JSON.stringify(input),
+      method: 'POST',
+      signal,
+    });
+
+    await readSseStream(response, onEvent, signal);
+  },
   async getPromptPreview(chatId: string): Promise<PromptPreview> {
     return expectJson<PromptPreview>(`/chats/${chatId}/prompt-preview`);
   },

@@ -225,6 +225,21 @@
             @keydown.enter.exact.prevent="submitMessage"
           />
           <button
+            v-if="!chatStore.generating"
+            aria-label="Continue response"
+            class="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 text-white/45 transition hover:bg-white/[0.04] hover:text-white/70 disabled:opacity-35"
+            :disabled="!chatStore.activeMessages.length || chatStore.activeMessages.at(-1)?.role !== 'assistant'"
+            title="Continue"
+            type="button"
+            @click="chatStore.continueGeneration()"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2.5 8h8" />
+              <path d="M7.5 4.5 11 8l-3.5 3.5" />
+              <path d="M11 4.5h2.5v7H11" />
+            </svg>
+          </button>
+          <button
             v-if="chatStore.generating"
             class="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-rose-400/30 text-rose-300/70 transition hover:border-rose-400/50 hover:text-rose-300"
             type="button"

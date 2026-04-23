@@ -461,6 +461,46 @@ describe('api app', () => {
     expect(assistantMessages).toHaveLength(1);
   });
 
+  it('continues the last assistant message without creating a new turn', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    const authHeaders = { cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '' };
+
+    const createChatResponse = await app.request('/chats', {
+      body: JSON.stringify({ providerConfigId: 'provider_local', title: 'Continue chat' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+    const chat = (await createChatResponse.json()) as { id: string };
+
+    const generateResponse = await app.request(`/chats/${chat.id}/generate`, {
+      body: JSON.stringify({ content: 'Say pong' }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+
+    expect(generateResponse.status).toBe(200);
+    await generateResponse.text();
+
+    const continueResponse = await app.request(`/chats/${chat.id}/continue`, {
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      method: 'POST',
+    });
+
+    expect(continueResponse.status).toBe(200);
+    await continueResponse.text();
+
+    const messagesAfter = (await (await app.request(`/chats/${chat.id}/messages`, { headers: authHeaders })).json()) as Array<{ content: string; role: string }>;
+    expect(messagesAfter).toHaveLength(2);
+    expect(messagesAfter[1]?.role).toBe('assistant');
+    expect(messagesAfter[1]?.content).toBe('PongPong');
+  });
+
   it('rejects password change with wrong current password', async () => {
     const { app } = await createTestApp();
     const loginResponse = await app.request('/auth/login', {

@@ -77,6 +77,16 @@ export const useChatStore = defineStore('chat', {
       const lastMessage = currentMessages.at(-1);
 
       if (event.type === 'response.started') {
+        if (lastMessage?.id === event.messageId) {
+          currentMessages[currentMessages.length - 1] = {
+            ...lastMessage,
+            state: 'streaming',
+            updatedAt: new Date().toISOString(),
+          };
+          this.messagesByChatId[chatId] = currentMessages;
+          return;
+        }
+
         const userIndex = currentMessages.findIndex((message) => message.id.startsWith('temp-user-'));
 
         if (userIndex !== -1) {
@@ -418,6 +428,50 @@ export const useChatStore = defineStore('chat', {
           await this.refreshAfterGeneration(chat.id).catch(() => undefined);
         } else {
           this.error = error instanceof Error ? error.message : 'Failed to retry generation';
+          await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        }
+      } finally {
+        this.generating = false;
+        this.abortController = null;
+      }
+    },
+    async continueGeneration() {
+      const chat = this.activeChat;
+
+      if (!chat || this.generating) {
+        return;
+      }
+
+      const lastMessage = this.activeMessages.at(-1);
+
+      if (!lastMessage || lastMessage.role !== 'assistant') {
+        return;
+      }
+
+      this.error = '';
+      this.generating = true;
+
+      const controller = new AbortController();
+      this.abortController = controller;
+
+      try {
+        await api.continueChat(
+          chat.id,
+          {
+            maxOutputTokens: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.maxOutputTokens ?? undefined) : this.activePreset?.maxOutputTokens,
+            providerConfigId: chat.providerConfigId ?? this.defaultProvider?.id,
+            temperature: chat.presetId ? (this.presets.find((preset) => preset.id === chat.presetId)?.temperature ?? undefined) : this.activePreset?.temperature,
+          },
+          (event) => this.appendStreamEvent(chat.id, event),
+          controller.signal,
+        );
+
+        await this.refreshAfterGeneration(chat.id);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          await this.refreshAfterGeneration(chat.id).catch(() => undefined);
+        } else {
+          this.error = error instanceof Error ? error.message : 'Failed to continue generation';
           await this.refreshAfterGeneration(chat.id).catch(() => undefined);
         }
       } finally {
