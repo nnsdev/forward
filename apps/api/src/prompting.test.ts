@@ -41,6 +41,18 @@ const provider = {
   reasoningEnabled: true,
 };
 
+const settings = {
+  createdAt: '2026-04-22T00:00:00.000Z',
+  defaultPresetId: null,
+  defaultProviderConfigId: null,
+  id: 'app_settings',
+  personaAvatarAssetPath: null,
+  personaDescription: 'A quiet astronomer observing the scene.',
+  personaName: 'Julien',
+  showReasoningByDefault: false,
+  updatedAt: '2026-04-22T00:00:00.000Z',
+};
+
 describe('buildPromptPreview', () => {
   it('builds a richer character system prompt', () => {
     const preview = buildPromptPreview({
@@ -75,6 +87,7 @@ describe('buildPromptPreview', () => {
         topP: 0.9,
       },
       provider,
+      settings,
     });
 
     expect(preview.messages[0]?.content).toContain('You are roleplaying as Artemis');
@@ -115,11 +128,109 @@ describe('buildPromptPreview', () => {
         topP: 0.9,
       },
       provider,
+      settings,
     });
 
     expect(preview.truncation.applied).toBe(true);
     expect(preview.truncation.droppedMessageIds.length).toBeGreaterThan(0);
     expect(preview.messages[0]?.role).toBe('system');
     expect(preview.tokenEstimate).toBeLessThanOrEqual(2048);
+  });
+
+  it('injects persona into the system prompt for message mode', () => {
+    const preview = buildPromptPreview({
+      character: null,
+      chatId: 'chat_1',
+      config: baseConfig,
+      messages: [],
+      preset: {
+        contextLength: 4096,
+        frequencyPenalty: 0,
+        id: 'preset_balanced',
+        instructTemplate: null,
+        maxOutputTokens: 256,
+        minP: 0.05,
+        name: 'Balanced',
+        presencePenalty: 0,
+        repeatPenalty: 1,
+        seed: null,
+        stopStrings: [],
+        systemPrompt: '',
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.9,
+      },
+      provider,
+      settings,
+    });
+
+    expect(preview.messages[0]?.content).toContain('User name:');
+    expect(preview.messages[0]?.content).toContain('Julien');
+    expect(preview.messages[0]?.content).toContain('User persona:');
+  });
+
+  it('folds leading assistant opening messages into the system prompt for message mode', () => {
+    const preview = buildPromptPreview({
+      character: {
+        avatarAssetPath: null,
+        description: 'An observant astronomer.',
+        exampleDialogue: '',
+        firstMessage: 'The observatory is quiet tonight.',
+        id: 'character_1',
+        name: 'Artemis',
+        personality: 'Calm and curious.',
+        scenario: 'Watching a meteor shower.',
+      },
+      chatId: 'chat_1',
+      config: baseConfig,
+      messages: [
+        {
+          chatId: 'chat_1',
+          content: 'The observatory is quiet tonight.',
+          createdAt: '2026-04-22T00:00:00.000Z',
+          id: 'message_1',
+          reasoningContent: '',
+          role: 'assistant',
+          state: 'completed',
+          updatedAt: '2026-04-22T00:00:00.000Z',
+        },
+        {
+          chatId: 'chat_1',
+          content: 'What are you watching for?',
+          createdAt: '2026-04-22T00:00:01.000Z',
+          id: 'message_2',
+          reasoningContent: '',
+          role: 'user',
+          state: 'completed',
+          updatedAt: '2026-04-22T00:00:01.000Z',
+        },
+      ],
+      preset: {
+        contextLength: 4096,
+        frequencyPenalty: 0,
+        id: 'preset_balanced',
+        instructTemplate: null,
+        maxOutputTokens: 256,
+        minP: 0.05,
+        name: 'Balanced',
+        presencePenalty: 0,
+        repeatPenalty: 1,
+        seed: null,
+        stopStrings: [],
+        systemPrompt: '',
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.9,
+      },
+      provider,
+      settings,
+    });
+
+    expect(preview.messages[0]?.role).toBe('system');
+    expect(preview.messages[0]?.content).toContain('Assistant opening 1:');
+    expect(preview.messages[1]).toMatchObject({
+      content: 'What are you watching for?',
+      role: 'user',
+    });
   });
 });

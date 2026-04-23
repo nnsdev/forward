@@ -15,7 +15,7 @@ export const ProviderModelsResponseSchema = z.object({
 });
 
 export const LiveStreamRequestSchema = z.object({
-  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  maxOutputTokens: z.number().int().positive().max(1024).optional(),
   prompt: z.string().min(1),
   providerConfigId: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),

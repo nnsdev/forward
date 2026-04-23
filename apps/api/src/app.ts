@@ -1,4 +1,5 @@
 import {
+  AppSettingsSchema,
   CharacterSchema,
   ChatSchema,
   CreateCharacterInputSchema,
@@ -15,14 +16,15 @@ import {
   RetryChatInputSchema,
   SessionResponseSchema,
   StreamEventSchema,
+  UpdateAppSettingsInputSchema,
   UpdateChatInputSchema,
   UpdateMessageContentSchema,
   UpdateProviderConfigInputSchema,
 } from '@forward/shared';
 import type { Character, Chat, Preset, ProviderConfig } from '@forward/shared';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, extname, join, resolve } from 'node:path';
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -65,9 +67,27 @@ function isAllowedOrigin(origin: string | undefined, configuredOrigin: string): 
   return allowedOrigins.has(origin) ? origin : null;
 }
 
+function sanitizeFileStem(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '') || 'persona';
+}
+
+async function persistAvatar(config: AppConfig, filename: string, buffer: Buffer): Promise<string> {
+  const avatarDir = resolve(config.mediaRoot, 'avatars');
+
+  await mkdir(avatarDir, { recursive: true });
+
+  const extension = extname(filename) || '.png';
+  const finalName = `${sanitizeFileStem(basename(filename, extension))}-${crypto.randomUUID()}${extension}`;
+  const fullPath = join(avatarDir, finalName);
+
+  await writeFile(fullPath, buffer);
+
+  return fullPath;
+}
+
 const GenerateChatRouteSchema = z.object({
   content: z.string().min(1),
-  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  maxOutputTokens: z.number().int().positive().max(1024).optional(),
   providerConfigId: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),
 });
@@ -96,7 +116,7 @@ const UpdateChatRouteSchema = z
   .refine((value) => Object.keys(value).length > 0, 'At least one field must be updated');
 
 const RetryChatRouteSchema = z.object({
-  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  maxOutputTokens: z.number().int().positive().max(1024).optional(),
   providerConfigId: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),
 });
@@ -188,13 +208,13 @@ function buildGenerationInput(
 
   return preset.instructTemplate
     ? {
-        ...baseInput,
-        prompt: promptPreview.formattedPrompt,
-      }
+      ...baseInput,
+      prompt: promptPreview.formattedPrompt,
+    }
     : {
-        ...baseInput,
-        messages: promptPreview.messages,
-      };
+      ...baseInput,
+      messages: promptPreview.messages,
+    };
 }
 
 export function createApp(config: AppConfig, dependencies: AppDependencies) {
@@ -266,6 +286,8 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
   app.use('/chats/*', requireAuth(config));
   app.use('/messages', requireAuth(config));
   app.use('/messages/*', requireAuth(config));
+  app.use('/settings', requireAuth(config));
+  app.use('/settings/*', requireAuth(config));
   app.use('/debug/*', requireAuth(config));
 
   app.get('/characters', async (c) => c.json(await dependencies.characters.list()));
@@ -329,6 +351,33 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     const mimeTypes: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 
     return new Response(buffer, { headers: { 'content-type': mimeTypes[ext] ?? 'application/octet-stream' } });
+  });
+
+  app.get('/settings', async (c) => {
+    const settings = await dependencies.appSettings.get();
+
+    return c.json(AppSettingsSchema.parse(settings));
+  });
+
+  app.patch('/settings', async (c) => {
+    const input = UpdateAppSettingsInputSchema.parse(await c.req.json());
+    const settings = await dependencies.appSettings.update(input);
+
+    return c.json(settings);
+  });
+
+  app.post('/settings/persona-avatar', async (c) => {
+    const formData = await c.req.formData();
+    const file = formData.get('file');
+
+    if (!(file instanceof File)) {
+      return c.json({ error: 'Avatar file is required' }, 400);
+    }
+
+    const avatarAssetPath = await persistAvatar(config, file.name || 'persona.png', Buffer.from(await file.arrayBuffer()));
+    const settings = await dependencies.appSettings.update({ personaAvatarAssetPath: avatarAssetPath });
+
+    return c.json(settings);
   });
 
   app.get('/providers', async (c) => {
@@ -507,6 +556,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       }
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const settings = await dependencies.appSettings.get();
       const messages = await dependencies.messages.listByChatId(chat.id);
       const preview = buildPromptPreview({
         character,
@@ -515,6 +565,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         messages,
         preset,
         provider: providerConfig,
+        settings,
       });
 
       return c.json(PromptPreviewSchema.parse(preview));
@@ -545,6 +596,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       });
       const history = await dependencies.messages.listByChatId(chat.id);
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const settings = await dependencies.appSettings.get();
       const promptPreview = buildPromptPreview({
         character,
         chatId: chat.id,
@@ -552,6 +604,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         messages: history,
         preset,
         provider: providerConfig,
+        settings,
       });
       const assistantMessage = await dependencies.messages.create({
         chatId: chat.id,
@@ -668,6 +721,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       }
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const settings = await dependencies.appSettings.get();
       const promptPreview = buildPromptPreview({
         character,
         chatId: chat.id,
@@ -675,6 +729,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         messages: history,
         preset,
         provider: providerConfig,
+        settings,
       });
       const assistantMessage = await dependencies.messages.create({
         chatId: chat.id,

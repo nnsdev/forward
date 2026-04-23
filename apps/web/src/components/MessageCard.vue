@@ -59,8 +59,24 @@
     v-else-if="role === 'user'"
     class="group relative flex justify-end rp-animate-enter"
   >
-    <div class="max-w-[85%] rounded-2xl rounded-br-md bg-white/[0.04] px-4 py-3">
-      <p class="whitespace-pre-wrap text-[15px] leading-7 text-white/88">{{ content }}</p>
+    <div class="max-w-[85%]">
+      <p class="mb-1 text-right text-[13px] font-medium text-white/38">{{ userDisplayName }}</p>
+      <div class="rounded-2xl rounded-br-md bg-white/[0.04] px-4 py-3">
+        <p class="whitespace-pre-wrap text-[15px] leading-7 text-white/88">{{ content }}</p>
+      </div>
+    </div>
+    <div
+      v-if="userAvatarUrl"
+      class="ml-3 mt-0.5 h-9 w-9 shrink-0 overflow-hidden rounded-full"
+    >
+      <img :src="userAvatarUrl" alt="" class="h-full w-full object-cover" />
+    </div>
+    <div
+      v-else
+      class="ml-3 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+      :style="userAvatarStyle"
+    >
+      {{ userAvatarInitial }}
     </div>
     <div v-if="messageId" class="absolute -top-1 left-0 flex gap-1 opacity-0 transition group-hover:opacity-100">
       <button
@@ -94,6 +110,8 @@ const props = defineProps<{
   reasoning?: string;
   characterName?: string;
   characterAvatarPath?: string | null;
+  userName?: string;
+  userAvatarPath?: string | null;
   messageId?: string;
 }>();
 
@@ -106,13 +124,19 @@ const reasoningOpen = ref(false);
 
 const hasReasoning = computed(() => Boolean(props.reasoning?.trim()));
 const displayName = computed(() => props.characterName || 'Assistant');
+const userDisplayName = computed(() => props.userName || 'You');
 const avatarInitial = computed(() => {
   const name = props.characterName || 'A';
   return name.charAt(0).toUpperCase();
 });
+const userAvatarInitial = computed(() => userDisplayName.value.charAt(0).toUpperCase());
 const avatarUrl = computed(() => {
   if (!props.characterAvatarPath) return null;
   return `${getApiBaseUrl()}/media/avatars/${props.characterAvatarPath.split(/[/\\]/).pop()}`;
+});
+const userAvatarUrl = computed(() => {
+  if (!props.userAvatarPath) return null;
+  return `${getApiBaseUrl()}/media/avatars/${props.userAvatarPath.split(/[/\\]/).pop()}`;
 });
 const avatarStyle = computed(() => {
   const name = props.characterName || 'Assistant';
@@ -126,6 +150,20 @@ const avatarStyle = computed(() => {
   return {
     background: `hsl(${hue}, ${sat}%, ${lit}%)`,
     color: `hsl(${hue}, ${sat + 10}%, ${lit + 40}%)`,
+  };
+});
+const userAvatarStyle = computed(() => {
+  const name = userDisplayName.value;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = 210 + (Math.abs(hash) % 25);
+  const sat = 22 + (Math.abs(hash >> 8) % 18);
+  const lit = 30 + (Math.abs(hash >> 16) % 10);
+  return {
+    background: `hsl(${hue}, ${sat}%, ${lit}%)`,
+    color: `hsl(${hue}, ${sat + 10}%, ${lit + 42}%)`,
   };
 });
 const renderedContent = computed(() => {

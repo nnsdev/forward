@@ -86,7 +86,7 @@ describe('CreatePresetInputSchema', () => {
     const result = CreatePresetInputSchema.parse({
       contextLength: 8192,
       frequencyPenalty: 0.5,
-      maxOutputTokens: 512,
+      maxOutputTokens: 1024,
       minP: 0.1,
       name: 'Precise',
       presencePenalty: 0.3,

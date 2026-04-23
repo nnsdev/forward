@@ -74,6 +74,12 @@
         >
           Presets
         </button>
+        <button
+          class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
+          @click="showPersonaEditor = true"
+        >
+          Persona
+        </button>
         <RouterLink
           class="block w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
           to="/prompt"
@@ -186,6 +192,8 @@
               :message-id="message.id"
               :character-name="message.role === 'assistant' ? chatStore.activeCharacter?.name : undefined"
               :character-avatar-path="message.role === 'assistant' ? chatStore.activeCharacter?.avatarAssetPath : undefined"
+              :user-name="message.role === 'user' ? chatStore.appSettings?.personaName : undefined"
+              :user-avatar-path="message.role === 'user' ? chatStore.appSettings?.personaAvatarAssetPath : undefined"
               @retry="handleRetry"
               @delete="handleDeleteMessage"
             />
@@ -716,6 +724,53 @@
     </div>
   </div>
 
+  <div v-if="showPersonaEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showPersonaEditor = false">
+    <div class="w-[28rem] rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
+      <p class="text-sm font-medium text-white/85">Persona</p>
+      <form class="mt-4 space-y-3" @submit.prevent="savePersona">
+        <div class="flex items-center gap-3">
+          <img v-if="personaAvatarUrl" :src="personaAvatarUrl" alt="" class="h-12 w-12 rounded-full object-cover" />
+          <div
+            v-else
+            class="flex h-12 w-12 items-center justify-center rounded-full text-sm font-semibold"
+            :style="personaAvatarStyle"
+          >
+            {{ (personaForm.name || 'Y').charAt(0).toUpperCase() }}
+          </div>
+          <label class="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/55 transition hover:bg-white/[0.04] hover:text-white/75">
+            Upload avatar
+            <input class="hidden" type="file" accept="image/*" @change="uploadPersonaAvatar" />
+          </label>
+        </div>
+        <input
+          v-model="personaForm.name"
+          class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+          placeholder="Persona name"
+        />
+        <textarea
+          v-model="personaForm.description"
+          class="min-h-28 w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+          placeholder="Persona description"
+        />
+        <div class="flex gap-2">
+          <button
+            class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+            type="button"
+            @click="showPersonaEditor = false"
+          >
+            Cancel
+          </button>
+          <button
+            class="flex-1 rounded-lg bg-[var(--rp-accent)] px-3 py-2 text-sm font-medium text-[#0a1212] transition hover:brightness-110"
+            type="submit"
+          >
+            Save persona
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <p v-if="chatStore.error" class="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-lg bg-rose-500/10 px-4 py-2 text-sm text-rose-300/80 rp-animate-fade">
     {{ chatStore.error }}
   </p>
@@ -749,9 +804,11 @@ const renameTitle = ref('');
 const renamingChatId = ref<string | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const sidebarOpen = ref(false);
+const showPersonaEditor = ref(false);
 const showPasswordChange = ref(false);
 const passwordError = ref('');
 const passwordForm = reactive({ current: '', next: '' });
+const personaForm = reactive({ description: '', name: 'User' });
 const characterForm = reactive<CreateCharacterInput>({
   avatarAssetPath: null,
   description: '',
@@ -817,6 +874,13 @@ const characterAvatarUrl = computed(() => {
   return avatarUrlFor(chatStore.activeCharacter.avatarAssetPath);
 });
 
+const personaAvatarStyle = computed(() => avatarStyleForName(personaForm.name || 'Y'));
+
+const personaAvatarUrl = computed(() => {
+  if (!chatStore.appSettings?.personaAvatarAssetPath) return null;
+  return avatarUrlFor(chatStore.appSettings.personaAvatarAssetPath);
+});
+
 function scrollToBottom() {
   nextTick(() => {
     const el = scrollContainer.value;
@@ -845,23 +909,36 @@ watch(() => chatStore.activeChatId, async (newId) => {
     scrollToBottom();
   }
   firstMessageSent = false;
-  checkFirstMessage();
+  await checkFirstMessage();
 });
 
 onMounted(async () => {
   await chatStore.initialize();
+  personaForm.name = chatStore.appSettings?.personaName ?? 'User';
+  personaForm.description = chatStore.appSettings?.personaDescription ?? '';
   scrollToBottom();
-  checkFirstMessage();
+  await checkFirstMessage();
 });
 
-function checkFirstMessage() {
+watch(() => chatStore.appSettings, (settings) => {
+  if (!settings) return;
+  personaForm.name = settings.personaName;
+  personaForm.description = settings.personaDescription;
+}, { deep: true });
+
+async function checkFirstMessage() {
   if (firstMessageSent) return;
   if (!chatStore.activeChat) return;
   if (chatStore.activeMessages.length > 0) return;
   const character = chatStore.activeCharacter;
   if (!character?.firstMessage) return;
   firstMessageSent = true;
-  chatStore.sendMessage(character.firstMessage);
+
+  try {
+    await chatStore.createAssistantMessage(character.firstMessage);
+  } catch {
+    firstMessageSent = false;
+  }
 }
 
 function autoResize() {
@@ -927,10 +1004,26 @@ async function importCharacter(event: Event) {
   input.value = '';
 }
 
+async function savePersona() {
+  await chatStore.updateSettings({
+    personaDescription: personaForm.description,
+    personaName: personaForm.name.trim() || 'User',
+  });
+  showPersonaEditor.value = false;
+}
+
+async function uploadPersonaAvatar(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  await chatStore.uploadPersonaAvatar(file);
+  input.value = '';
+}
+
 async function attachCharacter(characterId: string | null) {
   await chatStore.ensureChat();
   await chatStore.assignCharacterToActiveChat(characterId);
-  checkFirstMessage();
+  await checkFirstMessage();
 }
 
 async function removeCharacter(characterId: string) {

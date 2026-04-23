@@ -1,4 +1,4 @@
-import type { Character, InstructTemplate, Message, Preset, PromptPreview, ProviderConfig } from '@forward/shared';
+import type { AppSettings, Character, InstructTemplate, Message, Preset, PromptPreview, ProviderConfig } from '@forward/shared';
 import { PLAIN_TEMPLATE } from '@forward/shared';
 
 import type { AppConfig } from './config';
@@ -12,6 +12,7 @@ interface BuildPromptInput {
   messages: Message[];
   preset: Preset;
   provider: ProviderConfig;
+  settings: AppSettings;
 }
 
 function compactSections(parts: Array<string | undefined>): string {
@@ -32,6 +33,55 @@ function buildCharacterSystemPrompt(character: Character, systemPromptOverride: 
   ]);
 }
 
+function buildPersonaSection(settings: AppSettings): string | undefined {
+  if (!settings.personaName.trim() && !settings.personaDescription.trim()) {
+    return undefined;
+  }
+
+  return compactSections([
+    settings.personaName.trim() ? `User name:\n${settings.personaName.trim()}` : undefined,
+    settings.personaDescription.trim() ? `User persona:\n${settings.personaDescription.trim()}` : undefined,
+  ]);
+}
+
+function normalizeMessageModeHistory(systemPrompt: string, messages: Message[]): {
+  messages: Message[];
+  systemPrompt: string;
+} {
+  const leadingAssistantMessages: Message[] = [];
+  let firstUserSeen = false;
+
+  for (const message of messages) {
+    if (message.role === 'user') {
+      firstUserSeen = true;
+      break;
+    }
+
+    if (!firstUserSeen && message.role === 'assistant') {
+      leadingAssistantMessages.push(message);
+      continue;
+    }
+
+    break;
+  }
+
+  if (leadingAssistantMessages.length === 0) {
+    return { messages, systemPrompt };
+  }
+
+  const openingTranscript = leadingAssistantMessages
+    .map((message, index) => `Assistant opening ${index + 1}:\n${message.content}`)
+    .join('\n\n');
+
+  return {
+    messages: messages.slice(leadingAssistantMessages.length),
+    systemPrompt: compactSections([
+      systemPrompt,
+      openingTranscript,
+    ]),
+  };
+}
+
 function renderStoryStringTemplate(
   template: string,
   values: Record<string, string>,
@@ -46,7 +96,7 @@ function renderStoryStringTemplate(
   return trimmed.trim();
 }
 
-function buildStoryString(character: Character | null, systemPrompt: string, template: InstructTemplate): string {
+function buildStoryString(character: Character | null, systemPrompt: string, template: InstructTemplate, settings: AppSettings): string {
   const storyTemplate = template.storyStringTemplate || '{{#if system}}{{system}}{{/if}}{{trim}}';
 
   return renderStoryStringTemplate(storyTemplate, {
@@ -54,9 +104,10 @@ function buildStoryString(character: Character | null, systemPrompt: string, tem
     anchorBefore: '',
     description: character?.description ?? '',
     personality: character?.personality ?? '',
-    persona: '',
+    persona: settings.personaDescription ?? '',
     scenario: character?.scenario ?? '',
     system: systemPrompt,
+    user: settings.personaName ?? '',
     wiAfter: '',
     wiBefore: '',
   });
@@ -120,17 +171,24 @@ function formatMessage(template: InstructTemplate, role: 'system' | 'user' | 'as
 
 export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
   const template = resolveTemplate(input.preset);
-  const systemPrompt = input.character
+  const baseSystemPrompt = input.character
     ? buildCharacterSystemPrompt(input.character, input.preset.systemPrompt)
     : (input.preset.systemPrompt || input.config.defaultAssistantSystemPrompt);
+  const mergedSystemPrompt = compactSections([baseSystemPrompt, buildPersonaSection(input.settings)]);
 
   const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
 
-  const preservedMessages = [...input.messages];
+  const initialMessages = input.preset.instructTemplate
+    ? [...input.messages]
+    : normalizeMessageModeHistory(mergedSystemPrompt, input.messages).messages;
+  const systemPrompt = input.preset.instructTemplate
+    ? mergedSystemPrompt
+    : normalizeMessageModeHistory(mergedSystemPrompt, input.messages).systemPrompt;
+  const preservedMessages = [...initialMessages];
   const droppedMessageIds: string[] = [];
 
   const storyStringContent = input.preset.instructTemplate
-    ? buildStoryString(input.character, input.preset.systemPrompt || input.config.defaultAssistantSystemPrompt, template)
+    ? buildStoryString(input.character, input.preset.systemPrompt || input.config.defaultAssistantSystemPrompt, template, input.settings)
     : systemPrompt;
   const storyString = formatStoryString(template, storyStringContent);
   const exampleDialogue = buildExampleDialogue(input.character, template);

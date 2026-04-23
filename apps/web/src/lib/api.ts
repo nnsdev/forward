@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   Character,
   Chat,
   CreateCharacterInput,
@@ -17,6 +18,7 @@ import type {
   SessionResponse,
   UpdateCharacterInput,
   UpdateChatInput,
+  UpdateAppSettingsInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
 } from '@forward/shared';
@@ -161,6 +163,9 @@ export const api = {
   async getSession(): Promise<SessionResponse> {
     return expectJson<SessionResponse>('/auth/session');
   },
+  async getSettings(): Promise<AppSettings> {
+    return expectJson<AppSettings>('/settings');
+  },
   async importCharacter(file: File): Promise<Character> {
     const formData = new FormData();
 
@@ -181,6 +186,16 @@ export const api = {
     }
 
     return expectJson<Preset>('/presets/import', {
+      body: formData,
+      method: 'POST',
+    });
+  },
+  async uploadPersonaAvatar(file: File): Promise<AppSettings> {
+    const formData = new FormData();
+
+    formData.append('file', file);
+
+    return expectJson<AppSettings>('/settings/persona-avatar', {
       body: formData,
       method: 'POST',
     });
@@ -253,6 +268,12 @@ export const api = {
   },
   async updatePreset(presetId: string, input: UpdatePresetInput): Promise<Preset> {
     return expectJson<Preset>(`/presets/${presetId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+  async updateSettings(input: UpdateAppSettingsInput): Promise<AppSettings> {
+    return expectJson<AppSettings>('/settings', {
       body: JSON.stringify(input),
       method: 'PATCH',
     });

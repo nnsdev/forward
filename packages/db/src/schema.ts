@@ -71,6 +71,9 @@ export const appSettings = sqliteTable('app_settings', {
   id: text('id').primaryKey(),
   defaultProviderConfigId: text('default_provider_config_id'),
   defaultPresetId: text('default_preset_id'),
+  personaAvatarAssetPath: text('persona_avatar_asset_path'),
+  personaDescription: text('persona_description').notNull().default(''),
+  personaName: text('persona_name').notNull().default('User'),
   showReasoningByDefault: integer('show_reasoning_by_default', { mode: 'boolean' }).notNull().default(false),
   ...timestamps,
 });

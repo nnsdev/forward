@@ -157,7 +157,7 @@ export const CreateMessageInputSchema = z.object({
 
 export const GenerateChatInputSchema = z.object({
   content: z.string().min(1),
-  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  maxOutputTokens: z.number().int().positive().max(1024).optional(),
   providerConfigId: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),
 });
@@ -167,7 +167,7 @@ export const UpdateMessageContentSchema = z.object({
 });
 
 export const RetryChatInputSchema = z.object({
-  maxOutputTokens: z.number().int().positive().max(512).optional(),
+  maxOutputTokens: z.number().int().positive().max(1024).optional(),
   providerConfigId: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),
 });

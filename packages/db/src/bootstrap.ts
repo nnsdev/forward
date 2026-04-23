@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
   id TEXT PRIMARY KEY,
   default_provider_config_id TEXT,
   default_preset_id TEXT,
+  persona_avatar_asset_path TEXT,
+  persona_description TEXT NOT NULL DEFAULT '',
+  persona_name TEXT NOT NULL DEFAULT 'User',
   show_reasoning_by_default INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -97,6 +100,9 @@ const MIGRATIONS: Array<{ column: string; sql: string; table: string }> = [
   { column: 'context_length', sql: 'ALTER TABLE presets ADD COLUMN context_length INTEGER NOT NULL DEFAULT 131072', table: 'presets' },
   { column: 'system_prompt', sql: 'ALTER TABLE presets ADD COLUMN system_prompt TEXT NOT NULL DEFAULT \'\'', table: 'presets' },
   { column: 'instruct_template_json', sql: 'ALTER TABLE presets ADD COLUMN instruct_template_json TEXT NOT NULL DEFAULT \'\'', table: 'presets' },
+  { column: 'persona_avatar_asset_path', sql: 'ALTER TABLE app_settings ADD COLUMN persona_avatar_asset_path TEXT', table: 'app_settings' },
+  { column: 'persona_description', sql: 'ALTER TABLE app_settings ADD COLUMN persona_description TEXT NOT NULL DEFAULT \'\'', table: 'app_settings' },
+  { column: 'persona_name', sql: 'ALTER TABLE app_settings ADD COLUMN persona_name TEXT NOT NULL DEFAULT \'User\'', table: 'app_settings' },
 ];
 
 function getColumnNames(sqlite: DatabaseSync, table: string): Set<string> {
@@ -107,9 +113,12 @@ function getColumnNames(sqlite: DatabaseSync, table: string): Set<string> {
 export function initializeDatabase(sqlite: DatabaseSync): void {
   sqlite.exec(SCHEMA_SQL);
 
-  const existingColumns = getColumnNames(sqlite, 'presets');
+  const existingPresetColumns = getColumnNames(sqlite, 'presets');
+  const existingAppSettingsColumns = getColumnNames(sqlite, 'app_settings');
 
   for (const migration of MIGRATIONS) {
+    const existingColumns = migration.table === 'app_settings' ? existingAppSettingsColumns : existingPresetColumns;
+
     if (!existingColumns.has(migration.column)) {
       sqlite.exec(migration.sql);
     }

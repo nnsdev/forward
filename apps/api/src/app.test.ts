@@ -109,6 +109,45 @@ describe('api app', () => {
     await expect(response.json()).resolves.toEqual({ authenticated: false });
   });
 
+  it('reads and updates persona settings', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+    const authHeaders = {
+      cookie: loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '',
+    };
+
+    const settingsResponse = await app.request('/settings', {
+      headers: authHeaders,
+    });
+
+    expect(settingsResponse.status).toBe(200);
+    await expect(settingsResponse.json()).resolves.toMatchObject({
+      personaDescription: '',
+      personaName: 'User',
+    });
+
+    const updateResponse = await app.request('/settings', {
+      body: JSON.stringify({ personaDescription: 'Curious and direct.', personaName: 'Julien' }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      method: 'PATCH',
+    });
+
+    expect(updateResponse.status).toBe(200);
+    await expect(updateResponse.json()).resolves.toMatchObject({
+      personaDescription: 'Curious and direct.',
+      personaName: 'Julien',
+    });
+  });
+
   it('creates chats and persists generated assistant state', async () => {
     const { app } = await createTestApp();
     const loginResponse = await app.request('/auth/login', {

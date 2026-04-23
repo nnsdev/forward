@@ -31,6 +31,17 @@ describe('chat store', () => {
   });
 
   it('loads providers, creates a chat, and persists streamed messages', async () => {
+    const settings = {
+      createdAt: '2026-04-22T00:00:00.000Z',
+      defaultPresetId: null,
+      defaultProviderConfigId: null,
+      id: 'app_settings',
+      personaAvatarAssetPath: null,
+      personaDescription: '',
+      personaName: 'User',
+      showReasoningByDefault: false,
+      updatedAt: '2026-04-22T00:00:00.000Z',
+    };
     const provider = {
       apiKeyEnvVar: null,
       baseUrl: 'http://127.0.0.1:8080',
@@ -95,6 +106,10 @@ describe('chat store', () => {
       const url = typeof input === 'string' ? input : input.toString();
       const method = init?.method ?? 'GET';
 
+      if (url.endsWith('/settings') && method === 'GET') {
+        return new Response(JSON.stringify(settings), { status: 200 });
+      }
+
       if (url.endsWith('/providers') && method === 'GET') {
         return new Response(JSON.stringify({ providers: [provider] }), { status: 200 });
       }
@@ -149,6 +164,17 @@ describe('chat store', () => {
   });
 
   it('updates and deletes characters while detaching active chats', async () => {
+    const settings = {
+      createdAt: '2026-04-22T00:00:00.000Z',
+      defaultPresetId: null,
+      defaultProviderConfigId: null,
+      id: 'app_settings',
+      personaAvatarAssetPath: null,
+      personaDescription: '',
+      personaName: 'User',
+      showReasoningByDefault: false,
+      updatedAt: '2026-04-22T00:00:00.000Z',
+    };
     const provider = {
       apiKeyEnvVar: null,
       baseUrl: 'http://127.0.0.1:8080',
@@ -189,6 +215,10 @@ describe('chat store', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
       const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/settings') && method === 'GET') {
+        return new Response(JSON.stringify(settings), { status: 200 });
+      }
 
       if (url.endsWith('/providers') && method === 'GET') {
         return new Response(JSON.stringify({ providers: [provider] }), { status: 200 });
@@ -251,5 +281,56 @@ describe('chat store', () => {
 
     expect(chatStore.characters).toEqual([]);
     expect(chatStore.activeChat?.characterId).toBeNull();
+  });
+
+  it('creates an opening assistant message without flipping it to user', async () => {
+    const createdChat = {
+      characterId: 'character_1',
+      createdAt: '2026-04-22T00:00:00.000Z',
+      id: 'chat_1',
+      presetId: null,
+      providerConfigId: 'provider_local',
+      title: 'Chat 1',
+      updatedAt: '2026-04-22T00:00:00.000Z',
+    };
+    const openingMessage = {
+      chatId: 'chat_1',
+      content: 'The observatory is quiet tonight.',
+      createdAt: '2026-04-22T00:00:01.000Z',
+      id: 'assistant_opening',
+      reasoningContent: '',
+      role: 'assistant',
+      state: 'completed',
+      updatedAt: '2026-04-22T00:00:01.000Z',
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/chats') && method === 'POST') {
+        return new Response(JSON.stringify(createdChat), { status: 201 });
+      }
+
+      if (url.endsWith('/chats/chat_1/messages') && method === 'POST') {
+        return new Response(JSON.stringify(openingMessage), { status: 201 });
+      }
+
+      if (url.endsWith('/chats') && method === 'GET') {
+        return new Response(JSON.stringify([createdChat]), { status: 200 });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { useChatStore } = await import('./chat');
+    const chatStore = useChatStore();
+
+    await chatStore.createAssistantMessage('The observatory is quiet tonight.');
+
+    expect(chatStore.activeMessages).toEqual([openingMessage]);
+    expect(chatStore.activeMessages[0]?.role).toBe('assistant');
   });
 });

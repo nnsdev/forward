@@ -30,7 +30,7 @@ export const InstructTemplateSchema = z.object({
 export type InstructTemplate = z.infer<typeof InstructTemplateSchema>;
 
 export const DEFAULT_STORY_STRING_TEMPLATE =
-  '{{#if system}}{{system}}\n{{/if}}{{#if description}}{{description}}\n{{/if}}{{#if personality}}{{personality}}\n{{/if}}{{#if scenario}}{{scenario}}\n{{/if}}{{trim}}';
+  '{{#if system}}{{system}}\n{{/if}}{{#if description}}{{description}}\n{{/if}}{{#if personality}}{{personality}}\n{{/if}}{{#if scenario}}{{scenario}}\n{{/if}}{{#if persona}}{{persona}}\n{{/if}}{{trim}}';
 
 export const CHAT_ML_TEMPLATE: InstructTemplate = {
   activationRegex: '',

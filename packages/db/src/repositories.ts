@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 
 import type {
+  AppSettings,
   Character,
   Chat,
   CreateCharacterInput,
@@ -16,11 +17,12 @@ import type {
   UpdateChatInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
+  UpdateAppSettingsInput,
 } from '@forward/shared';
-import { CharacterSchema, ChatSchema, MessageSchema, PresetSchema, ProviderConfigSchema } from '@forward/shared';
+import { AppSettingsSchema, CharacterSchema, ChatSchema, MessageSchema, PresetSchema, ProviderConfigSchema } from '@forward/shared';
 
 import type { SqliteDatabaseClient } from './client';
-import { characters, chats, messages, presets, providerConfigs } from './schema';
+import { appSettings, characters, chats, messages, presets, providerConfigs } from './schema';
 
 export interface ProviderConfigRepository {
   create(input: CreateProviderConfigInput): Promise<ProviderConfig>;
@@ -76,11 +78,17 @@ export interface MessageRepository {
 }
 
 export interface AppRepositories {
+  appSettings: AppSettingsRepository;
   characters: CharacterRepository;
   chats: ChatRepository;
   messages: MessageRepository;
   presets: PresetRepository;
   providerConfigs: ProviderConfigRepository;
+}
+
+export interface AppSettingsRepository {
+  get(): Promise<AppSettings>;
+  update(input: UpdateAppSettingsInput): Promise<AppSettings>;
 }
 
 function nowIso(): string {
@@ -155,6 +163,70 @@ function mapMessage(row: typeof messages.$inferSelect): Message {
     state: row.state,
     updatedAt: row.updatedAt,
   });
+}
+
+function mapAppSettings(row: typeof appSettings.$inferSelect): AppSettings {
+  return AppSettingsSchema.parse({
+    createdAt: row.createdAt,
+    defaultPresetId: row.defaultPresetId ?? null,
+    defaultProviderConfigId: row.defaultProviderConfigId ?? null,
+    id: row.id,
+    personaAvatarAssetPath: row.personaAvatarAssetPath ?? null,
+    personaDescription: row.personaDescription,
+    personaName: row.personaName,
+    showReasoningByDefault: row.showReasoningByDefault,
+    updatedAt: row.updatedAt,
+  });
+}
+
+export function createAppSettingsRepository(client: SqliteDatabaseClient): AppSettingsRepository {
+  const SETTINGS_ID = 'app_settings';
+
+  function ensureSettingsRow(): typeof appSettings.$inferSelect {
+    const existing = client.db.select().from(appSettings).where(eq(appSettings.id, SETTINGS_ID)).get();
+
+    if (existing) {
+      return existing;
+    }
+
+    const timestamp = nowIso();
+
+    client.db.insert(appSettings).values({
+      createdAt: timestamp,
+      defaultPresetId: null,
+      defaultProviderConfigId: null,
+      id: SETTINGS_ID,
+      personaAvatarAssetPath: null,
+      personaDescription: '',
+      personaName: 'User',
+      showReasoningByDefault: false,
+      updatedAt: timestamp,
+    }).run();
+
+    return client.db.select().from(appSettings).where(eq(appSettings.id, SETTINGS_ID)).get()!;
+  }
+
+  return {
+    async get() {
+      return mapAppSettings(ensureSettingsRow());
+    },
+    async update(input) {
+      const existing = ensureSettingsRow();
+      const timestamp = nowIso();
+
+      client.db.update(appSettings).set({
+        defaultPresetId: input.defaultPresetId === undefined ? existing.defaultPresetId : input.defaultPresetId,
+        defaultProviderConfigId: input.defaultProviderConfigId === undefined ? existing.defaultProviderConfigId : input.defaultProviderConfigId,
+        personaAvatarAssetPath: input.personaAvatarAssetPath === undefined ? existing.personaAvatarAssetPath : input.personaAvatarAssetPath,
+        personaDescription: input.personaDescription ?? existing.personaDescription,
+        personaName: input.personaName ?? existing.personaName,
+        showReasoningByDefault: input.showReasoningByDefault ?? existing.showReasoningByDefault,
+        updatedAt: timestamp,
+      }).where(eq(appSettings.id, SETTINGS_ID)).run();
+
+      return mapAppSettings(client.db.select().from(appSettings).where(eq(appSettings.id, SETTINGS_ID)).get()!);
+    },
+  };
 }
 
 export function createProviderConfigRepository(client: SqliteDatabaseClient): ProviderConfigRepository {
@@ -663,6 +735,7 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
 
 export function createRepositories(client: SqliteDatabaseClient): AppRepositories {
   return {
+    appSettings: createAppSettingsRepository(client),
     characters: createCharacterRepository(client),
     chats: createChatRepository(client),
     messages: createMessageRepository(client),

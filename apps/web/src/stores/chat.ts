@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   Character,
   Chat,
   CreateCharacterInput,
@@ -9,6 +10,7 @@ import type {
   Preset,
   ProviderConfig,
   UpdateCharacterInput,
+  UpdateAppSettingsInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
 } from '@forward/shared';
@@ -23,6 +25,7 @@ function makeTempId(prefix: string): string {
 export const useChatStore = defineStore('chat', {
   state: () => ({
     activeChatId: null as string | null,
+    appSettings: null as AppSettings | null,
     characters: [] as Character[],
     chats: [] as Chat[],
     error: '' as string,
@@ -224,17 +227,19 @@ export const useChatStore = defineStore('chat', {
       this.error = '';
 
       try {
-        const [providers, chats, characters, presets] = await Promise.all([
+        const [settings, providers, chats, characters, presets] = await Promise.all([
+          api.getSettings(),
           api.listProviders(),
           api.listChats(),
           api.listCharacters(),
           api.listPresets(),
         ]);
 
-        this.characters = characters;
+        this.appSettings = settings;
         this.providers = providers;
-        this.presets = presets;
         this.chats = chats;
+        this.characters = characters;
+        this.presets = presets;
         this.activeChatId = chats[0]?.id ?? null;
 
         if (this.activeChatId) {
@@ -269,6 +274,16 @@ export const useChatStore = defineStore('chat', {
       }
 
       return preset;
+    },
+    async updateSettings(input: UpdateAppSettingsInput) {
+      this.appSettings = await api.updateSettings(input);
+
+      return this.appSettings;
+    },
+    async uploadPersonaAvatar(file: File) {
+      this.appSettings = await api.uploadPersonaAvatar(file);
+
+      return this.appSettings;
     },
     async loadMessages(chatId: string) {
       this.messagesByChatId[chatId] = await api.listMessages(chatId);
@@ -336,6 +351,24 @@ export const useChatStore = defineStore('chat', {
         this.generating = false;
         this.abortController = null;
       }
+    },
+    async createAssistantMessage(content: string) {
+      const trimmed = content.trim();
+
+      if (!trimmed) {
+        return;
+      }
+
+      const chat = await this.ensureChat();
+      const message = await api.createMessage(chat.id, {
+        content: trimmed,
+        role: 'assistant',
+      });
+
+      this.messagesByChatId[chat.id] = [...(this.messagesByChatId[chat.id] ?? []), message];
+      this.chats = await api.listChats();
+
+      return message;
     },
     cancelGeneration() {
       this.abortController?.abort();
