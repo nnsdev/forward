@@ -81,7 +81,7 @@
     <div class="max-w-[85%]">
       <p class="mb-1 text-right text-[13px] font-medium text-white/38">{{ userDisplayName }}</p>
       <div class="rounded-2xl rounded-br-md bg-white/[0.04] px-4 py-3">
-        <p class="whitespace-pre-wrap text-[15px] leading-7 text-white/88">{{ content }}</p>
+        <p class="whitespace-pre-wrap text-[15px] leading-7 text-white/88" v-html="renderedUserContent"></p>
       </div>
     </div>
     <div
@@ -118,10 +118,11 @@
 </template>
 
 <script setup lang="ts">
+import DOMPurify from 'dompurify';
 import { computed, ref } from 'vue';
 
 import { getApiBaseUrl } from '../lib/config';
-import { renderMarkdown } from '../lib/markdown';
+import { highlightQuotes, renderMarkdown } from '../lib/markdown';
 
 const props = defineProps<{
   role: 'user' | 'assistant' | 'system';
@@ -193,5 +194,10 @@ const userAvatarStyle = computed(() => {
 const renderedContent = computed(() => {
   if (!props.content) return '';
   return renderMarkdown(props.content);
+});
+
+const renderedUserContent = computed(() => {
+  if (!props.content) return '';
+  return DOMPurify.sanitize(highlightQuotes(props.content));
 });
 </script>

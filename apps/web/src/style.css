@@ -164,3 +164,11 @@ body {
 .rp-markdown em {
   color: rgba(255, 255, 255, 0.7);
 }
+
+.rp-quote {
+  color: var(--rp-accent);
+  font-weight: 500;
+  background: var(--rp-accent-dim);
+  border-radius: 3px;
+  padding: 0.05em 0.15em;
+}
