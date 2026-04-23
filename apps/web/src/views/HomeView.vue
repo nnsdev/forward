@@ -410,6 +410,70 @@
                   type="number"
                 />
               </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Min P</label>
+                <input
+                  v-model.number="presetForm.minP"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  max="1"
+                  min="0"
+                  step="0.01"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Repeat penalty</label>
+                <input
+                  v-model.number="presetForm.repeatPenalty"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  min="1"
+                  step="0.05"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Freq penalty</label>
+                <input
+                  v-model.number="presetForm.frequencyPenalty"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  max="2"
+                  min="0"
+                  step="0.05"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Pres penalty</label>
+                <input
+                  v-model.number="presetForm.presencePenalty"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  max="2"
+                  min="0"
+                  step="0.05"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Context length</label>
+                <input
+                  v-model.number="presetForm.contextLength"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  min="4096"
+                  step="256"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Seed</label>
+                <input
+                  v-model.number="presetForm.seed"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  min="0"
+                  placeholder="Random"
+                  step="1"
+                  type="number"
+                />
+              </div>
             </div>
             <div class="flex gap-2">
               <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
@@ -451,9 +515,9 @@
                   </button>
                 </div>
               </div>
-              <p class="mt-0.5 text-[11px] text-white/25">
-                temp {{ preset.temperature }} &middot; max {{ preset.maxOutputTokens }} &middot; top_p {{ preset.topP }} &middot; top_k {{ preset.topK }}
-              </p>
+<p class="mt-0.5 text-[11px] text-white/25">
+                  temp {{ preset.temperature }} &middot; max {{ preset.maxOutputTokens }} &middot; ctx {{ preset.contextLength }} &middot; top_p {{ preset.topP }} &middot; top_k {{ preset.topK }} &middot; min_p {{ preset.minP }}
+                </p>
             </div>
           </div>
         </div>
@@ -658,8 +722,14 @@ const characterForm = reactive<CreateCharacterInput>({
   scenario: '',
 });
 const presetForm = reactive<CreatePresetInput>({
+  contextLength: 131072,
+  frequencyPenalty: 0,
   maxOutputTokens: 256,
+  minP: 0.05,
   name: '',
+  presencePenalty: 0,
+  repeatPenalty: 1,
+  seed: null,
   stopStrings: [],
   temperature: 0.7,
   topK: 40,
@@ -832,6 +902,12 @@ function resetPresetForm() {
   presetForm.maxOutputTokens = 256;
   presetForm.topP = 0.9;
   presetForm.topK = 40;
+  presetForm.minP = 0.05;
+  presetForm.frequencyPenalty = 0;
+  presetForm.presencePenalty = 0;
+  presetForm.repeatPenalty = 1;
+  presetForm.seed = null;
+  presetForm.contextLength = 4096;
   presetForm.stopStrings = [];
 }
 
@@ -845,6 +921,12 @@ function editPreset(presetId: string) {
   presetForm.maxOutputTokens = preset.maxOutputTokens;
   presetForm.topP = preset.topP;
   presetForm.topK = preset.topK;
+  presetForm.minP = preset.minP;
+  presetForm.frequencyPenalty = preset.frequencyPenalty;
+  presetForm.presencePenalty = preset.presencePenalty;
+  presetForm.repeatPenalty = preset.repeatPenalty;
+  presetForm.seed = preset.seed;
+  presetForm.contextLength = preset.contextLength;
   presetForm.stopStrings = [...preset.stopStrings];
 }
 

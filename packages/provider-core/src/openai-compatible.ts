@@ -148,35 +148,52 @@ async function* iterateSseChunks(response: Response): AsyncIterable<ProviderChun
   }
 }
 
-function buildChatCompletionBody(config: ProviderConfig, input: StreamGenerateInput): {
-  max_tokens: number;
-  messages: ChatCompletionMessage[];
-  model: string;
-  stop?: string[];
-  stream: true;
-  temperature?: number;
-  top_p?: number;
-} {
-  const body = {
+function buildChatCompletionBody(config: ProviderConfig, input: StreamGenerateInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {
     max_tokens: input.maxOutputTokens ?? 128,
     messages: input.messages,
     model: input.model ?? config.model,
-    stop: input.stop,
-    stream: true as const,
-    temperature: input.temperature,
-    top_p: input.topP,
+    stream: true,
   };
 
-  if (body.temperature === undefined) {
-    delete body.temperature;
+  if (input.temperature !== undefined) {
+    body.temperature = input.temperature;
   }
 
-  if (!body.stop?.length) {
-    delete body.stop;
+  if (input.topP !== undefined) {
+    body.top_p = input.topP;
   }
 
-  if (body.top_p === undefined) {
-    delete body.top_p;
+  if (input.topK !== undefined) {
+    body.top_k = input.topK;
+  }
+
+  if (input.minP !== undefined) {
+    body.min_p = input.minP;
+  }
+
+  if (input.frequencyPenalty !== undefined) {
+    body.frequency_penalty = input.frequencyPenalty;
+  }
+
+  if (input.presencePenalty !== undefined) {
+    body.presence_penalty = input.presencePenalty;
+  }
+
+  if (input.repeatPenalty !== undefined) {
+    body.repeat_penalty = input.repeatPenalty;
+  }
+
+  if (input.seed !== undefined && input.seed !== null) {
+    body.seed = input.seed;
+  }
+
+  if (input.contextLength !== undefined) {
+    body.num_ctx = input.contextLength;
+  }
+
+  if (input.stop?.length) {
+    body.stop = input.stop;
   }
 
   return body;

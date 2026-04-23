@@ -22,9 +22,15 @@ async function createTestApp() {
   });
 
   await repositories.presets.upsert({
+    contextLength: 4096,
+    frequencyPenalty: 0,
     id: 'preset_balanced',
     maxOutputTokens: 256,
+    minP: 0.05,
     name: 'Balanced',
+    presencePenalty: 0,
+    repeatPenalty: 1,
+    seed: null,
     stopStrings: [],
     temperature: 0.7,
     topK: 40,
@@ -56,9 +62,15 @@ async function createTestApp() {
         defaultProviderId: 'provider_local',
         defaultProviderModel: 'qwen',
         defaultProviderName: 'Local qwen',
+        defaultPresetContextLength: 4096,
+        defaultPresetFrequencyPenalty: 0,
         defaultPresetId: 'preset_balanced',
         defaultPresetMaxOutputTokens: 256,
+        defaultPresetMinP: 0.05,
         defaultPresetName: 'Balanced',
+        defaultPresetPresencePenalty: 0,
+        defaultPresetRepeatPenalty: 1,
+        defaultPresetSeed: null,
         defaultPresetStopStrings: [],
         defaultPresetTemperature: 0.7,
         defaultPresetTopK: 40,
@@ -453,8 +465,14 @@ describe('api app', () => {
 
     const createdPresetResponse = await app.request('/presets', {
       body: JSON.stringify({
+        contextLength: 2048,
+        frequencyPenalty: 0,
         maxOutputTokens: 128,
+        minP: 0.1,
         name: 'Precise',
+        presencePenalty: 0,
+        repeatPenalty: 1.1,
+        seed: null,
         stopStrings: ['END'],
         temperature: 0.2,
         topK: 20,

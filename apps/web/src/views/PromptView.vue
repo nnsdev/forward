@@ -26,6 +26,11 @@
           <article class="rounded-[1.5rem] border border-white/7 bg-black/12 p-4">
             <p class="text-[11px] uppercase tracking-[0.22em] text-white/36">Preset</p>
             <p class="mt-2 text-sm text-white/92">{{ preview.preset.name }}</p>
+            <p class="mt-1 text-[11px] leading-5 text-white/35">
+              temp {{ preview.preset.temperature }} &middot; top_p {{ preview.preset.topP }} &middot; top_k {{ preview.preset.topK }} &middot; min_p {{ preview.preset.minP }}<br>
+              ctx {{ preview.preset.contextLength }} &middot; max {{ preview.preset.maxOutputTokens }} &middot; rep {{ preview.preset.repeatPenalty }} &middot; freq {{ preview.preset.frequencyPenalty }} &middot; pres {{ preview.preset.presencePenalty }}<br>
+              <template v-if="preview.preset.seed !== null">seed {{ preview.preset.seed }}</template><template v-else>seed random</template>
+            </p>
           </article>
           <article class="rounded-[1.5rem] border border-white/7 bg-black/12 p-4">
             <p class="text-[11px] uppercase tracking-[0.22em] text-white/36">Token estimate</p>

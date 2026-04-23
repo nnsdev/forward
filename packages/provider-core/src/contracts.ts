@@ -17,11 +17,18 @@ export interface ChatCompletionMessage {
 }
 
 export interface StreamGenerateInput {
+  contextLength?: number;
+  frequencyPenalty?: number;
   maxOutputTokens?: number;
   messages: ChatCompletionMessage[];
+  minP?: number;
   model?: string;
+  presencePenalty?: number;
+  repeatPenalty?: number;
+  seed?: number | null;
   stop?: string[];
   temperature?: number;
+  topK?: number;
   topP?: number;
 }
 

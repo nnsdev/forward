@@ -4,6 +4,8 @@ import {
   RetryChatInputSchema,
   UpdateMessageContentSchema,
   CreateProviderConfigInputSchema,
+  CreatePresetInputSchema,
+  PresetSchema,
 } from './chat';
 
 describe('RetryChatInputSchema', () => {
@@ -56,5 +58,76 @@ describe('CreateProviderConfigInputSchema', () => {
     });
 
     expect(result.apiKeyEnvVar).toBe('MY_KEY');
+  });
+});
+
+describe('CreatePresetInputSchema', () => {
+  it('applies defaults for optional fields', () => {
+    const result = CreatePresetInputSchema.parse({
+      maxOutputTokens: 256,
+      name: 'Test',
+      stopStrings: [],
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.9,
+    });
+
+    expect(result.contextLength).toBe(131072);
+    expect(result.frequencyPenalty).toBe(0);
+    expect(result.minP).toBe(0.05);
+    expect(result.presencePenalty).toBe(0);
+    expect(result.repeatPenalty).toBe(1);
+    expect(result.seed).toBeNull();
+  });
+
+  it('accepts all fields explicitly', () => {
+    const result = CreatePresetInputSchema.parse({
+      contextLength: 8192,
+      frequencyPenalty: 0.5,
+      maxOutputTokens: 512,
+      minP: 0.1,
+      name: 'Precise',
+      presencePenalty: 0.3,
+      repeatPenalty: 1.15,
+      seed: 42,
+      stopStrings: ['END'],
+      temperature: 0.2,
+      topK: 20,
+      topP: 0.8,
+    });
+
+    expect(result.contextLength).toBe(8192);
+    expect(result.frequencyPenalty).toBe(0.5);
+    expect(result.minP).toBe(0.1);
+    expect(result.presencePenalty).toBe(0.3);
+    expect(result.repeatPenalty).toBe(1.15);
+    expect(result.seed).toBe(42);
+  });
+});
+
+describe('PresetSchema', () => {
+  it('includes all generation parameters', () => {
+    const result = PresetSchema.parse({
+      contextLength: 131072,
+      frequencyPenalty: 0,
+      id: 'preset_test',
+      maxOutputTokens: 256,
+      minP: 0.05,
+      name: 'Test',
+      presencePenalty: 0,
+      repeatPenalty: 1,
+      seed: null,
+      stopStrings: [],
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.9,
+    });
+
+    expect(result.contextLength).toBe(131072);
+    expect(result.frequencyPenalty).toBe(0);
+    expect(result.minP).toBe(0.05);
+    expect(result.presencePenalty).toBe(0);
+    expect(result.repeatPenalty).toBe(1);
+    expect(result.seed).toBeNull();
   });
 });

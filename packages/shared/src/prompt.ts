@@ -10,6 +10,17 @@ export const PromptPreviewSchema = z.object({
   preset: z.object({
     id: z.string().min(1),
     name: z.string().min(1),
+    contextLength: z.number().int().positive(),
+    frequencyPenalty: z.number(),
+    maxOutputTokens: z.number().int().positive(),
+    minP: z.number(),
+    presencePenalty: z.number(),
+    repeatPenalty: z.number(),
+    seed: z.number().int().nullable(),
+    stopStrings: z.array(z.string()),
+    temperature: z.number(),
+    topK: z.number().int().nonnegative(),
+    topP: z.number(),
   }),
   tokenEstimate: z.number().int().nonnegative(),
   truncation: z.object({

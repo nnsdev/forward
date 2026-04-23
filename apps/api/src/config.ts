@@ -20,9 +20,15 @@ export interface AppConfig {
   defaultProviderId: string;
   defaultProviderModel: string;
   defaultProviderName: string;
+  defaultPresetContextLength: number;
+  defaultPresetFrequencyPenalty: number;
   defaultPresetId: string;
   defaultPresetMaxOutputTokens: number;
+  defaultPresetMinP: number;
   defaultPresetName: string;
+  defaultPresetPresencePenalty: number;
+  defaultPresetRepeatPenalty: number;
+  defaultPresetSeed: number | null;
   defaultPresetStopStrings: string[];
   defaultPresetTemperature: number;
   defaultPresetTopK: number;
@@ -45,9 +51,15 @@ export function getAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfig
     defaultProviderId: source.DEFAULT_PROVIDER_ID ?? DEFAULT_PROVIDER_ID,
     defaultProviderModel: source.DEFAULT_PROVIDER_MODEL ?? DEFAULT_PROVIDER_MODEL,
     defaultProviderName: source.DEFAULT_PROVIDER_NAME ?? DEFAULT_PROVIDER_NAME,
+    defaultPresetContextLength: Number(source.DEFAULT_PRESET_CONTEXT_LENGTH ?? '131072'),
+    defaultPresetFrequencyPenalty: Number(source.DEFAULT_PRESET_FREQUENCY_PENALTY ?? '0'),
     defaultPresetId: source.DEFAULT_PRESET_ID ?? DEFAULT_PRESET_ID,
     defaultPresetMaxOutputTokens: Number(source.DEFAULT_PRESET_MAX_OUTPUT_TOKENS ?? '256'),
+    defaultPresetMinP: Number(source.DEFAULT_PRESET_MIN_P ?? '0.05'),
     defaultPresetName: source.DEFAULT_PRESET_NAME ?? DEFAULT_PRESET_NAME,
+    defaultPresetPresencePenalty: Number(source.DEFAULT_PRESET_PRESENCE_PENALTY ?? '0'),
+    defaultPresetRepeatPenalty: Number(source.DEFAULT_PRESET_REPEAT_PENALTY ?? '1'),
+    defaultPresetSeed: source.DEFAULT_PRESET_SEED ? Number(source.DEFAULT_PRESET_SEED) : null,
     defaultPresetStopStrings: source.DEFAULT_PRESET_STOP_STRINGS ? source.DEFAULT_PRESET_STOP_STRINGS.split(',').map((value) => value.trim()).filter(Boolean) : [],
     defaultPresetTemperature: Number(source.DEFAULT_PRESET_TEMPERATURE ?? '0.7'),
     defaultPresetTopK: Number(source.DEFAULT_PRESET_TOP_K ?? '40'),

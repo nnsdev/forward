@@ -2,7 +2,7 @@ import type { Character, Message, Preset, PromptPreview, ProviderConfig } from '
 
 import type { AppConfig } from './config';
 
-const MAX_PROMPT_TOKENS = 2048;
+const DEFAULT_MAX_PROMPT_TOKENS = 131072;
 
 interface BuildPromptInput {
   character: Character | null;
@@ -52,6 +52,8 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
     },
   ];
 
+  const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
+
   while (preservedMessages.length > 0) {
     const candidateMessages = [
       ...promptMessages,
@@ -61,7 +63,7 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
       })),
     ];
 
-    if (estimateTokens(candidateMessages) <= MAX_PROMPT_TOKENS) {
+    if (estimateTokens(candidateMessages) <= maxPromptTokens) {
       break;
     }
 
@@ -84,8 +86,19 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
     chatId: input.chatId,
     messages: finalPromptMessages,
     preset: {
+      contextLength: input.preset.contextLength,
+      frequencyPenalty: input.preset.frequencyPenalty,
       id: input.preset.id,
+      maxOutputTokens: input.preset.maxOutputTokens,
+      minP: input.preset.minP,
       name: input.preset.name,
+      presencePenalty: input.preset.presencePenalty,
+      repeatPenalty: input.preset.repeatPenalty,
+      seed: input.preset.seed,
+      stopStrings: input.preset.stopStrings,
+      temperature: input.preset.temperature,
+      topK: input.preset.topK,
+      topP: input.preset.topP,
     },
     provider: {
       id: input.provider.id,

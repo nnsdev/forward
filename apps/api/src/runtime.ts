@@ -47,9 +47,15 @@ export async function createAppDependencies(config: AppConfig): Promise<AppDepen
   });
 
   await repositories.presets.upsert({
+    contextLength: config.defaultPresetContextLength,
+    frequencyPenalty: config.defaultPresetFrequencyPenalty,
     id: config.defaultPresetId,
     maxOutputTokens: config.defaultPresetMaxOutputTokens,
+    minP: config.defaultPresetMinP,
     name: config.defaultPresetName,
+    presencePenalty: config.defaultPresetPresencePenalty,
+    repeatPenalty: config.defaultPresetRepeatPenalty,
+    seed: config.defaultPresetSeed,
     stopStrings: config.defaultPresetStopStrings,
     temperature: config.defaultPresetTemperature,
     topK: config.defaultPresetTopK,

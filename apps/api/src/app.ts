@@ -1,20 +1,25 @@
 import {
+  CharacterSchema,
+  ChatSchema,
+  CreateCharacterInputSchema,
   CreateChatInputSchema,
+  CreatePresetInputSchema,
   CreateProviderConfigInputSchema,
-  LiveStreamRequestSchema,
+  GenerateChatInputSchema,
   LoginRequestSchema,
-  PromptPreviewSchema,
-  type Preset,
+  MessageSchema,
   ProviderListResponseSchema,
   ProviderModelsResponseSchema,
+  PromptPreviewSchema,
+  LiveStreamRequestSchema,
   RetryChatInputSchema,
   SessionResponseSchema,
   StreamEventSchema,
+  UpdateChatInputSchema,
   UpdateMessageContentSchema,
-  type Character,
-  type Chat,
-  type ProviderConfig,
+  UpdateProviderConfigInputSchema,
 } from '@forward/shared';
+import type { Character, Chat, Preset, ProviderConfig } from '@forward/shared';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
@@ -100,16 +105,7 @@ const CreateMessageRouteSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']).default('user'),
 });
 
-const CreatePresetRouteSchema = z.object({
-  maxOutputTokens: z.number().int().positive(),
-  name: z.string().min(1),
-  stopStrings: z.array(z.string()),
-  temperature: z.number().min(0).max(2),
-  topK: z.number().int().nonnegative(),
-  topP: z.number().min(0).max(1),
-});
-
-const UpdatePresetRouteSchema = CreatePresetRouteSchema.partial().extend({
+const UpdatePresetRouteSchema = CreatePresetInputSchema.partial().extend({
   name: z.string().min(1).optional(),
 });
 
@@ -345,7 +341,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
   app.get('/presets', async (c) => c.json(await dependencies.presets.list()));
 
   app.post('/presets', async (c) => {
-    const input = CreatePresetRouteSchema.parse(await c.req.json());
+    const input = CreatePresetInputSchema.parse(await c.req.json());
     const preset = await dependencies.presets.create(input);
 
     return c.json(preset, 201);
@@ -502,11 +498,18 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
 
         try {
           for await (const chunk of adapter.streamGenerate({
+            contextLength: preset.contextLength,
+            frequencyPenalty: preset.frequencyPenalty,
             maxOutputTokens: request.maxOutputTokens ?? preset.maxOutputTokens,
             messages: promptPreview.messages,
+            minP: preset.minP,
             model: providerConfig.model,
+            presencePenalty: preset.presencePenalty,
+            repeatPenalty: preset.repeatPenalty,
+            seed: preset.seed,
             stop: preset.stopStrings,
             temperature: request.temperature ?? preset.temperature,
+            topK: preset.topK,
             topP: preset.topP,
           })) {
             if (chunk.kind === 'reasoning' && chunk.text) {
@@ -629,11 +632,18 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
 
         try {
           for await (const chunk of adapter.streamGenerate({
+            contextLength: preset.contextLength,
+            frequencyPenalty: preset.frequencyPenalty,
             maxOutputTokens: request.maxOutputTokens ?? preset.maxOutputTokens,
             messages: promptPreview.messages,
+            minP: preset.minP,
             model: providerConfig.model,
+            presencePenalty: preset.presencePenalty,
+            repeatPenalty: preset.repeatPenalty,
+            seed: preset.seed,
             stop: preset.stopStrings,
             temperature: request.temperature ?? preset.temperature,
+            topK: preset.topK,
             topP: preset.topP,
           })) {
             if (chunk.kind === 'reasoning' && chunk.text) {

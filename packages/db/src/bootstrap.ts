@@ -19,6 +19,12 @@ CREATE TABLE IF NOT EXISTS presets (
   temperature REAL NOT NULL,
   top_p REAL NOT NULL,
   top_k INTEGER NOT NULL,
+  min_p REAL NOT NULL DEFAULT 0.05,
+  frequency_penalty REAL NOT NULL DEFAULT 0,
+  presence_penalty REAL NOT NULL DEFAULT 0,
+  repeat_penalty REAL NOT NULL DEFAULT 1,
+  seed INTEGER,
+  context_length INTEGER NOT NULL DEFAULT 131072,
   max_output_tokens INTEGER NOT NULL,
   stop_strings_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -80,6 +86,28 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 `;
 
+const MIGRATIONS: Array<{ column: string; sql: string; table: string }> = [
+  { column: 'min_p', sql: 'ALTER TABLE presets ADD COLUMN min_p REAL NOT NULL DEFAULT 0.05', table: 'presets' },
+  { column: 'frequency_penalty', sql: 'ALTER TABLE presets ADD COLUMN frequency_penalty REAL NOT NULL DEFAULT 0', table: 'presets' },
+  { column: 'presence_penalty', sql: 'ALTER TABLE presets ADD COLUMN presence_penalty REAL NOT NULL DEFAULT 0', table: 'presets' },
+  { column: 'repeat_penalty', sql: 'ALTER TABLE presets ADD COLUMN repeat_penalty REAL NOT NULL DEFAULT 1', table: 'presets' },
+  { column: 'seed', sql: 'ALTER TABLE presets ADD COLUMN seed INTEGER', table: 'presets' },
+  { column: 'context_length', sql: 'ALTER TABLE presets ADD COLUMN context_length INTEGER NOT NULL DEFAULT 131072', table: 'presets' },
+];
+
+function getColumnNames(sqlite: DatabaseSync, table: string): Set<string> {
+  const rows = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return new Set(rows.map((row) => row.name));
+}
+
 export function initializeDatabase(sqlite: DatabaseSync): void {
   sqlite.exec(SCHEMA_SQL);
+
+  const existingColumns = getColumnNames(sqlite, 'presets');
+
+  for (const migration of MIGRATIONS) {
+    if (!existingColumns.has(migration.column)) {
+      sqlite.exec(migration.sql);
+    }
+  }
 }

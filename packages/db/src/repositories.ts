@@ -114,9 +114,15 @@ function mapCharacter(row: typeof characters.$inferSelect): Character {
 
 function mapPreset(row: typeof presets.$inferSelect): Preset {
   return PresetSchema.parse({
+    contextLength: row.contextLength,
+    frequencyPenalty: row.frequencyPenalty,
     id: row.id,
     maxOutputTokens: row.maxOutputTokens,
+    minP: row.minP,
     name: row.name,
+    presencePenalty: row.presencePenalty,
+    repeatPenalty: row.repeatPenalty,
+    seed: row.seed ?? null,
     stopStrings: JSON.parse(row.stopStringsJson) as string[],
     temperature: row.temperature,
     topK: row.topK,
@@ -334,10 +340,16 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
       client.db
         .insert(presets)
         .values({
+          contextLength: input.contextLength,
           createdAt: timestamp,
+          frequencyPenalty: input.frequencyPenalty,
           id,
           maxOutputTokens: input.maxOutputTokens,
+          minP: input.minP,
           name: input.name,
+          presencePenalty: input.presencePenalty,
+          repeatPenalty: input.repeatPenalty,
+          seed: input.seed ?? null,
           stopStringsJson: JSON.stringify(input.stopStrings),
           temperature: input.temperature,
           topK: input.topK,
@@ -367,8 +379,14 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
         client.db
           .update(presets)
           .set({
+            contextLength: input.contextLength,
+            frequencyPenalty: input.frequencyPenalty,
             maxOutputTokens: input.maxOutputTokens,
+            minP: input.minP,
             name: input.name,
+            presencePenalty: input.presencePenalty,
+            repeatPenalty: input.repeatPenalty,
+            seed: input.seed ?? null,
             stopStringsJson: JSON.stringify(input.stopStrings),
             temperature: input.temperature,
             topK: input.topK,
@@ -381,10 +399,16 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
         client.db
           .insert(presets)
           .values({
+            contextLength: input.contextLength,
             createdAt: timestamp,
+            frequencyPenalty: input.frequencyPenalty,
             id: input.id,
             maxOutputTokens: input.maxOutputTokens,
+            minP: input.minP,
             name: input.name,
+            presencePenalty: input.presencePenalty,
+            repeatPenalty: input.repeatPenalty,
+            seed: input.seed ?? null,
             stopStringsJson: JSON.stringify(input.stopStrings),
             temperature: input.temperature,
             topK: input.topK,
@@ -408,8 +432,14 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
       client.db
         .update(presets)
         .set({
+          contextLength: input.contextLength ?? existing.contextLength,
+          frequencyPenalty: input.frequencyPenalty ?? existing.frequencyPenalty,
           maxOutputTokens: input.maxOutputTokens ?? existing.maxOutputTokens,
+          minP: input.minP ?? existing.minP,
           name: input.name ?? existing.name,
+          presencePenalty: input.presencePenalty ?? existing.presencePenalty,
+          repeatPenalty: input.repeatPenalty ?? existing.repeatPenalty,
+          seed: input.seed === undefined ? existing.seed : (input.seed ?? null),
           stopStringsJson: JSON.stringify(input.stopStrings ?? JSON.parse(existing.stopStringsJson)),
           temperature: input.temperature ?? existing.temperature,
           topK: input.topK ?? existing.topK,

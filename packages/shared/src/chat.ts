@@ -65,6 +65,12 @@ export const PresetSchema = z.object({
   temperature: z.number().min(0).max(2),
   topP: z.number().min(0).max(1),
   topK: z.number().int().nonnegative(),
+  minP: z.number().min(0).max(1),
+  frequencyPenalty: z.number().min(0).max(2),
+  presencePenalty: z.number().min(0).max(2),
+  repeatPenalty: z.number().min(1),
+  seed: z.number().int().nullable(),
+  contextLength: z.number().int().positive(),
   maxOutputTokens: z.number().int().positive(),
   stopStrings: z.array(z.string()),
 });
@@ -74,12 +80,29 @@ export const CreatePresetInputSchema = z.object({
   temperature: z.number().min(0).max(2),
   topP: z.number().min(0).max(1),
   topK: z.number().int().nonnegative(),
+  minP: z.number().min(0).max(1).default(0.05),
+  frequencyPenalty: z.number().min(0).max(2).default(0),
+  presencePenalty: z.number().min(0).max(2).default(0),
+  repeatPenalty: z.number().min(1).default(1),
+  seed: z.number().int().nullable().default(null),
+  contextLength: z.number().int().positive().default(131072),
   maxOutputTokens: z.number().int().positive(),
   stopStrings: z.array(z.string()),
 });
 
-export const UpdatePresetInputSchema = CreatePresetInputSchema.partial().extend({
+export const UpdatePresetInputSchema = z.object({
   name: z.string().min(1).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  topP: z.number().min(0).max(1).optional(),
+  topK: z.number().int().nonnegative().optional(),
+  minP: z.number().min(0).max(1).optional(),
+  frequencyPenalty: z.number().min(0).max(2).optional(),
+  presencePenalty: z.number().min(0).max(2).optional(),
+  repeatPenalty: z.number().min(1).optional(),
+  seed: z.number().int().nullable().optional(),
+  contextLength: z.number().int().positive().optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
+  stopStrings: z.array(z.string()).optional(),
 });
 
 export const MessageSchema = z.object({
