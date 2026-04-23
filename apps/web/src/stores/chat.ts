@@ -424,6 +424,62 @@ export const useChatStore = defineStore('chat', {
         message.id === updated.id ? updated : message,
       );
     },
+    async editAndRegenerate(messageId: string, content: string) {
+      const chatId = this.activeChatId;
+
+      if (!chatId || this.generating) {
+        return;
+      }
+
+      const updated = await api.updateMessage(messageId, { content });
+      const currentMessages = this.messagesByChatId[chatId] ?? [];
+      const editedIndex = currentMessages.findIndex((message) => message.id === updated.id);
+
+      if (editedIndex === -1) {
+        return;
+      }
+
+      const messagesToDelete = currentMessages.slice(editedIndex + 1);
+
+      for (const message of messagesToDelete) {
+        await api.deleteMessage(message.id);
+      }
+
+      this.messagesByChatId[chatId] = currentMessages.slice(0, editedIndex + 1).map((message) =>
+        message.id === updated.id ? updated : message,
+      );
+
+      this.error = '';
+      this.generating = true;
+
+      const controller = new AbortController();
+      this.abortController = controller;
+
+      try {
+        await api.regenerateChat(
+          chatId,
+          {
+            maxOutputTokens: this.activePreset?.maxOutputTokens,
+            providerConfigId: this.activeChat?.providerConfigId ?? this.defaultProvider?.id,
+            temperature: this.activePreset?.temperature,
+          },
+          (event) => this.appendStreamEvent(chatId, event),
+          controller.signal,
+        );
+
+        await this.refreshAfterGeneration(chatId);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          await this.refreshAfterGeneration(chatId).catch(() => undefined);
+        } else {
+          this.error = error instanceof Error ? error.message : 'Failed to regenerate';
+          await this.refreshAfterGeneration(chatId).catch(() => undefined);
+        }
+      } finally {
+        this.generating = false;
+        this.abortController = null;
+      }
+    },
     async renameChat(chatId: string, title: string) {
       const chat = await api.updateChat(chatId, { title });
       this.chats = this.chats.map((c) => (c.id === chat.id ? chat : c));

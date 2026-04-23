@@ -1354,7 +1354,7 @@ async function handleDeleteMessage(messageId: string) {
 }
 
 async function handleEditMessage(messageId: string, content: string) {
-  await chatStore.updateMessage(messageId, content);
+  await chatStore.editAndRegenerate(messageId, content);
 }
 
 async function handleSelectAttempt(messageId: string) {

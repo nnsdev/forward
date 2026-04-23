@@ -819,6 +819,60 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     }
   });
 
+  app.post('/chats/:chatId/regenerate', async (c) => {
+    try {
+      const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
+      const request = RetryChatRouteSchema.parse(await c.req.json());
+      const providerConfig = await resolveProviderConfig(dependencies, chat, request.providerConfigId);
+      const preset = await resolvePreset(dependencies, chat);
+
+      if (!providerConfig || !preset) {
+        return c.json({ error: !providerConfig ? 'Provider not found' : 'Preset not found' }, 404);
+      }
+
+      const history = await dependencies.messages.listByChatId(chat.id);
+      const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const settings = await dependencies.appSettings.get();
+      const adapter = dependencies.createProviderAdapter(providerConfig);
+      const promptPreview = await buildPromptPreview({
+        authorNote: chat.authorNote,
+        character,
+        chatId: chat.id,
+        config,
+        countTokens: adapter.countTokens.bind(adapter),
+        messages: history,
+        preset,
+        provider: providerConfig,
+        settings,
+      });
+      const assistantMessage = await dependencies.messages.create({
+        chatId: chat.id,
+        content: '',
+        reasoningContent: '',
+        role: 'assistant',
+        state: 'streaming',
+      });
+
+      return streamSSE(c, async (stream) => forwardAssistantStream(
+        stream,
+        dependencies,
+        chat.id,
+        assistantMessage.id,
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+          maxOutputTokens: request.maxOutputTokens,
+          temperature: request.temperature,
+        })),
+        adapter,
+      ));
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Chat not found') {
+        return c.json({ error: error.message }, 404);
+      }
+
+      throw error;
+    }
+  });
+
   app.delete('/messages/:messageId', async (c) => {
     await dependencies.messages.delete(c.req.param('messageId'));
 
