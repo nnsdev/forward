@@ -117,7 +117,10 @@ export const UpdatePresetInputSchema = z.object({
 });
 
 export const MessageSchema = z.object({
+  attemptGroupId: z.string().min(1).nullable().default(null),
+  attemptIndex: z.number().int().nonnegative().default(0),
   id: z.string().min(1),
+  isActiveAttempt: z.boolean().default(true),
   chatId: z.string().min(1),
   role: MessageRoleSchema,
   content: z.string(),

@@ -97,10 +97,13 @@ export const useChatStore = defineStore('chat', {
         }
 
         currentMessages.push({
+          attemptGroupId: event.messageId,
+          attemptIndex: 0,
           chatId,
           content: '',
           createdAt: new Date().toISOString(),
           id: event.messageId,
+          isActiveAttempt: true,
           reasoningContent: '',
           role: 'assistant',
           state: 'streaming',
@@ -318,10 +321,13 @@ export const useChatStore = defineStore('chat', {
 
       const chat = await this.ensureChat();
       const tempUserMessage: Message = {
+        attemptGroupId: null,
+        attemptIndex: 0,
         chatId: chat.id,
         content: trimmed,
         createdAt: new Date().toISOString(),
         id: makeTempId('temp-user'),
+        isActiveAttempt: true,
         reasoningContent: '',
         role: 'user',
         state: 'pending',
@@ -393,6 +399,16 @@ export const useChatStore = defineStore('chat', {
       await api.deleteMessage(messageId);
       this.messagesByChatId[chatId] = (this.messagesByChatId[chatId] ?? []).filter((message) => message.id !== messageId);
     },
+    async selectMessageAttempt(messageId: string) {
+      const chatId = this.activeChatId;
+
+      if (!chatId) {
+        return;
+      }
+
+      await api.selectMessageAttempt(messageId);
+      await this.loadMessages(chatId);
+    },
     async renameChat(chatId: string, title: string) {
       const chat = await api.updateChat(chatId, { title });
       this.chats = this.chats.map((c) => (c.id === chat.id ? chat : c));
@@ -442,7 +458,9 @@ export const useChatStore = defineStore('chat', {
         return;
       }
 
-      const lastMessage = this.activeMessages.at(-1);
+      const lastMessage = [...this.activeMessages]
+        .filter((message) => message.role !== 'assistant' || message.isActiveAttempt !== false)
+        .at(-1);
 
       if (!lastMessage || lastMessage.role !== 'assistant') {
         return;

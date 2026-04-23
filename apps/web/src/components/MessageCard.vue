@@ -34,6 +34,25 @@
       >
         {{ reasoningOpen ? 'Hide thinking' : 'Show thinking' }}
       </button>
+      <div v-if="(attemptTotal ?? 0) > 1" class="mt-3 flex items-center gap-2 text-[11px] text-white/30">
+        <button
+          type="button"
+          class="rounded px-1.5 py-0.5 transition hover:bg-white/[0.04] hover:text-white/60 disabled:opacity-30"
+          :disabled="!previousAttemptId"
+          @click="previousAttemptId && $emit('selectAttempt', previousAttemptId)"
+        >
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 3.5 5.5 8l5 4.5"/></svg>
+        </button>
+        <span>Attempt {{ attemptPosition }} / {{ attemptTotal }}</span>
+        <button
+          type="button"
+          class="rounded px-1.5 py-0.5 transition hover:bg-white/[0.04] hover:text-white/60 disabled:opacity-30"
+          :disabled="!nextAttemptId"
+          @click="nextAttemptId && $emit('selectAttempt', nextAttemptId)"
+        >
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 3.5 10.5 8l-5 4.5"/></svg>
+        </button>
+      </div>
     </div>
     <div v-if="messageId" class="absolute -top-1 right-0 flex gap-1 opacity-0 transition group-hover:opacity-100">
       <button
@@ -110,6 +129,10 @@ const props = defineProps<{
   reasoning?: string;
   characterName?: string;
   characterAvatarPath?: string | null;
+  attemptPosition?: number;
+  attemptTotal?: number;
+  previousAttemptId?: string | null;
+  nextAttemptId?: string | null;
   userName?: string;
   userAvatarPath?: string | null;
   messageId?: string;
@@ -118,6 +141,7 @@ const props = defineProps<{
 defineEmits<{
   delete: [messageId: string];
   retry: [messageId: string];
+  selectAttempt: [messageId: string];
 }>();
 
 const reasoningOpen = ref(false);

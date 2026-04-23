@@ -60,6 +60,9 @@ export const chats = sqliteTable('chats', {
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),
   chatId: text('chat_id').notNull(),
+  attemptGroupId: text('attempt_group_id'),
+  attemptIndex: integer('attempt_index').notNull().default(0),
+  isActiveAttempt: integer('is_active_attempt', { mode: 'boolean' }).notNull().default(true),
   role: text('role').notNull(),
   content: text('content').notNull(),
   reasoningContent: text('reasoning_content').notNull().default(''),

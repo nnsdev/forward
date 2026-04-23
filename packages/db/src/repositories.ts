@@ -59,8 +59,11 @@ export interface PresetRepository {
 }
 
 export interface CreateMessageInput {
+  attemptGroupId?: string | null;
+  attemptIndex?: number;
   chatId: string;
   content: string;
+  isActiveAttempt?: boolean;
   reasoningContent?: string;
   role: MessageRole;
   state?: MessageState;
@@ -73,6 +76,7 @@ export interface MessageRepository {
   delete(id: string): Promise<void>;
   getById(id: string): Promise<Message | null>;
   listByChatId(chatId: string): Promise<Message[]>;
+  setActiveAttempt(messageId: string): Promise<Message>;
   updateContent(id: string, content: string): Promise<Message>;
   updateState(id: string, state: MessageState): Promise<Message>;
 }
@@ -155,10 +159,13 @@ function mapChat(row: typeof chats.$inferSelect): Chat {
 
 function mapMessage(row: typeof messages.$inferSelect): Message {
   return MessageSchema.parse({
+    attemptGroupId: row.attemptGroupId ?? null,
+    attemptIndex: row.attemptIndex,
     chatId: row.chatId,
     content: row.content,
     createdAt: row.createdAt,
     id: row.id,
+    isActiveAttempt: row.isActiveAttempt,
     reasoningContent: row.reasoningContent,
     role: row.role,
     state: row.state,
@@ -660,14 +667,26 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
     async create(input) {
       const id = crypto.randomUUID();
       const timestamp = nowIso();
+      const attemptGroupId = input.role === 'assistant'
+        ? (input.attemptGroupId ?? id)
+        : null;
+      const attemptIndex = input.role === 'assistant'
+        ? (input.attemptIndex ?? 0)
+        : 0;
+      const isActiveAttempt = input.role === 'assistant'
+        ? (input.isActiveAttempt ?? true)
+        : true;
 
       client.db
         .insert(messages)
         .values({
+          attemptGroupId,
+          attemptIndex,
           chatId: input.chatId,
           content: input.content,
           createdAt: timestamp,
           id,
+          isActiveAttempt,
           reasoningContent: input.reasoningContent ?? '',
           role: input.role,
           state: input.state ?? 'completed',
@@ -693,6 +712,37 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
     },
     async listByChatId(chatId) {
       return client.db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(messages.createdAt).all().map(mapMessage);
+    },
+    async setActiveAttempt(messageId) {
+      const existing = getRequiredMessage(messageId);
+
+      if (existing.role !== 'assistant' || !existing.attemptGroupId) {
+        throw new Error(`message ${messageId} is not part of an assistant attempt group`);
+      }
+
+      const timestamp = nowIso();
+
+      client.db
+        .update(messages)
+        .set({
+          isActiveAttempt: false,
+          updatedAt: timestamp,
+        })
+        .where(eq(messages.attemptGroupId, existing.attemptGroupId))
+        .run();
+
+      client.db
+        .update(messages)
+        .set({
+          isActiveAttempt: true,
+          updatedAt: timestamp,
+        })
+        .where(eq(messages.id, messageId))
+        .run();
+
+      touchChat(existing.chatId, timestamp);
+
+      return mapMessage(getRequiredMessage(messageId));
     },
     async delete(id) {
       const existing = getRequiredMessage(id);

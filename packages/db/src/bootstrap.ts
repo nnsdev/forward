@@ -60,6 +60,9 @@ CREATE TABLE IF NOT EXISTS chats (
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
   chat_id TEXT NOT NULL,
+  attempt_group_id TEXT,
+  attempt_index INTEGER NOT NULL DEFAULT 0,
+  is_active_attempt INTEGER NOT NULL DEFAULT 1,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
   reasoning_content TEXT NOT NULL DEFAULT '',
@@ -105,6 +108,9 @@ const MIGRATIONS: Array<{ column: string; sql: string; table: string }> = [
   { column: 'persona_avatar_asset_path', sql: 'ALTER TABLE app_settings ADD COLUMN persona_avatar_asset_path TEXT', table: 'app_settings' },
   { column: 'persona_description', sql: 'ALTER TABLE app_settings ADD COLUMN persona_description TEXT NOT NULL DEFAULT \'\'', table: 'app_settings' },
   { column: 'persona_name', sql: 'ALTER TABLE app_settings ADD COLUMN persona_name TEXT NOT NULL DEFAULT \'User\'', table: 'app_settings' },
+  { column: 'attempt_group_id', sql: 'ALTER TABLE messages ADD COLUMN attempt_group_id TEXT', table: 'messages' },
+  { column: 'attempt_index', sql: 'ALTER TABLE messages ADD COLUMN attempt_index INTEGER NOT NULL DEFAULT 0', table: 'messages' },
+  { column: 'is_active_attempt', sql: 'ALTER TABLE messages ADD COLUMN is_active_attempt INTEGER NOT NULL DEFAULT 1', table: 'messages' },
 ];
 
 function getColumnNames(sqlite: DatabaseSync, table: string): Set<string> {
@@ -117,9 +123,14 @@ export function initializeDatabase(sqlite: DatabaseSync): void {
 
   const existingPresetColumns = getColumnNames(sqlite, 'presets');
   const existingAppSettingsColumns = getColumnNames(sqlite, 'app_settings');
+  const existingMessageColumns = getColumnNames(sqlite, 'messages');
 
   for (const migration of MIGRATIONS) {
-    const existingColumns = migration.table === 'app_settings' ? existingAppSettingsColumns : existingPresetColumns;
+    const existingColumns = migration.table === 'app_settings'
+      ? existingAppSettingsColumns
+      : migration.table === 'messages'
+        ? existingMessageColumns
+        : existingPresetColumns;
 
     if (!existingColumns.has(migration.column)) {
       sqlite.exec(migration.sql);

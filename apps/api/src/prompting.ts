@@ -82,6 +82,10 @@ function normalizeMessageModeHistory(systemPrompt: string, messages: Message[]):
   };
 }
 
+function getActiveConversationMessages(messages: Message[]): Message[] {
+  return messages.filter((message) => message.role !== 'assistant' || message.isActiveAttempt !== false);
+}
+
 function renderStoryStringTemplate(
   template: string,
   values: Record<string, string>,
@@ -178,12 +182,13 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
 
   const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
 
+  const activeMessages = getActiveConversationMessages(input.messages);
   const initialMessages = input.preset.instructTemplate
-    ? [...input.messages]
-    : normalizeMessageModeHistory(mergedSystemPrompt, input.messages).messages;
+    ? [...activeMessages]
+    : normalizeMessageModeHistory(mergedSystemPrompt, activeMessages).messages;
   const systemPrompt = input.preset.instructTemplate
     ? mergedSystemPrompt
-    : normalizeMessageModeHistory(mergedSystemPrompt, input.messages).systemPrompt;
+    : normalizeMessageModeHistory(mergedSystemPrompt, activeMessages).systemPrompt;
   const preservedMessages = [...initialMessages];
   const droppedMessageIds: string[] = [];
 

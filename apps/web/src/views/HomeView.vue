@@ -184,18 +184,23 @@
         <div v-else class="px-6 py-5 lg:px-10">
           <div class="space-y-5">
             <MessageCard
-              v-for="message in chatStore.activeMessages"
-              :key="message.id"
-              :content="message.content || (message.role === 'assistant' && message.reasoningContent ? 'Reasoning only response' : '')"
-              :reasoning="message.reasoningContent"
-              :role="message.role"
-              :message-id="message.id"
-              :character-name="message.role === 'assistant' ? chatStore.activeCharacter?.name : undefined"
-              :character-avatar-path="message.role === 'assistant' ? chatStore.activeCharacter?.avatarAssetPath : undefined"
-              :user-name="message.role === 'user' ? chatStore.appSettings?.personaName : undefined"
-              :user-avatar-path="message.role === 'user' ? chatStore.appSettings?.personaAvatarAssetPath : undefined"
+              v-for="entry in displayMessages"
+              :key="entry.message.id"
+              :content="entry.message.content || (entry.message.role === 'assistant' && entry.message.reasoningContent ? 'Reasoning only response' : '')"
+              :reasoning="entry.message.reasoningContent"
+              :role="entry.message.role"
+              :message-id="entry.message.id"
+              :attempt-position="entry.attemptPosition"
+              :attempt-total="entry.attemptTotal"
+              :previous-attempt-id="entry.previousAttemptId"
+              :next-attempt-id="entry.nextAttemptId"
+              :character-name="entry.message.role === 'assistant' ? chatStore.activeCharacter?.name : undefined"
+              :character-avatar-path="entry.message.role === 'assistant' ? chatStore.activeCharacter?.avatarAssetPath : undefined"
+              :user-name="entry.message.role === 'user' ? chatStore.appSettings?.personaName : undefined"
+              :user-avatar-path="entry.message.role === 'user' ? chatStore.appSettings?.personaAvatarAssetPath : undefined"
               @retry="handleRetry"
               @delete="handleDeleteMessage"
+              @select-attempt="handleSelectAttempt"
             />
           </div>
           <div v-if="chatStore.generating" class="mt-4 flex items-center gap-2 text-xs text-white/20">
@@ -228,7 +233,7 @@
             v-if="!chatStore.generating"
             aria-label="Continue response"
             class="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 text-white/45 transition hover:bg-white/[0.04] hover:text-white/70 disabled:opacity-35"
-            :disabled="!chatStore.activeMessages.length || chatStore.activeMessages.at(-1)?.role !== 'assistant'"
+            :disabled="!canContinue"
             title="Continue"
             type="button"
             @click="chatStore.continueGeneration()"
@@ -902,6 +907,45 @@ const characterAvatarUrl = computed(() => {
   return avatarUrlFor(chatStore.activeCharacter.avatarAssetPath);
 });
 
+interface DisplayMessageEntry {
+  attemptPosition?: number;
+  attemptTotal?: number;
+  message: (typeof chatStore.activeMessages)[number];
+  nextAttemptId?: string | null;
+  previousAttemptId?: string | null;
+}
+
+const displayMessages = computed<DisplayMessageEntry[]>(() => {
+  const seenAttemptGroups = new Set<string>();
+
+  return chatStore.activeMessages.flatMap((message) => {
+    if (message.role !== 'assistant' || !message.attemptGroupId) {
+      return [{ message }];
+    }
+
+    if (seenAttemptGroups.has(message.attemptGroupId)) {
+      return [];
+    }
+
+    seenAttemptGroups.add(message.attemptGroupId);
+    const attempts = chatStore.activeMessages
+      .filter((entry) => entry.role === 'assistant' && entry.attemptGroupId === message.attemptGroupId)
+      .sort((left, right) => left.attemptIndex - right.attemptIndex);
+    const activeIndex = Math.max(0, attempts.findIndex((entry) => entry.isActiveAttempt));
+    const activeAttempt = attempts[activeIndex] ?? message;
+
+    return [{
+      attemptPosition: activeIndex + 1,
+      attemptTotal: attempts.length,
+      message: activeAttempt,
+      nextAttemptId: attempts[activeIndex + 1]?.id ?? null,
+      previousAttemptId: attempts[activeIndex - 1]?.id ?? null,
+    }];
+  });
+});
+
+const canContinue = computed(() => displayMessages.value.at(-1)?.message.role === 'assistant');
+
 const personaAvatarStyle = computed(() => avatarStyleForName(personaForm.name || 'Y'));
 
 const personaAvatarUrl = computed(() => {
@@ -1258,6 +1302,10 @@ async function handleRetry(messageId: string) {
 
 async function handleDeleteMessage(messageId: string) {
   await chatStore.deleteMessage(messageId);
+}
+
+async function handleSelectAttempt(messageId: string) {
+  await chatStore.selectMessageAttempt(messageId);
 }
 
 async function changePassword() {

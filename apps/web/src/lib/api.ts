@@ -139,6 +139,11 @@ export const api = {
       throw new Error(`failed to delete message ${messageId}`);
     }
   },
+  async selectMessageAttempt(messageId: string): Promise<Message> {
+    return expectJson<Message>(`/messages/${messageId}/select-attempt`, {
+      method: 'POST',
+    });
+  },
   async generate(chatId: string, input: GenerateChatInput, onEvent: (event: NormalizedStreamEvent) => void, signal?: AbortSignal): Promise<void> {
     const response = await request(`/chats/${chatId}/generate`, {
       body: JSON.stringify(input),

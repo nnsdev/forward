@@ -454,12 +454,14 @@ describe('api app', () => {
     });
 
     expect(retryResponse.status).toBe(200);
+    await retryResponse.text();
 
-    const messagesAfter = (await (await app.request(`/chats/${chat.id}/messages`, { headers: authHeaders })).json()) as unknown[];
+    const messagesAfter = (await (await app.request(`/chats/${chat.id}/messages`, { headers: authHeaders })).json()) as Array<{ isActiveAttempt: boolean; role: string }>;
     const userMessages = messagesAfter.filter((m: any) => m.role === 'user');
     const assistantMessages = messagesAfter.filter((m: any) => m.role === 'assistant');
     expect(userMessages).toHaveLength(1);
-    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages).toHaveLength(2);
+    expect(assistantMessages.filter((m) => m.isActiveAttempt)).toHaveLength(1);
   });
 
   it('continues the last assistant message without creating a new turn', async () => {

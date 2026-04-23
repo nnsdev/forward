@@ -220,6 +220,10 @@ function buildGenerationInput(
     };
 }
 
+function getActiveConversationMessages<T extends { isActiveAttempt?: boolean; role: string }>(messages: T[]): T[] {
+  return messages.filter((message) => message.role !== 'assistant' || message.isActiveAttempt !== false);
+}
+
 export function createApp(config: AppConfig, dependencies: AppDependencies) {
   const app = new Hono();
 
@@ -703,19 +707,26 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.json(message);
   });
 
+  app.post('/messages/:messageId/select-attempt', async (c) => {
+    const message = await dependencies.messages.setActiveAttempt(c.req.param('messageId'));
+
+    return c.json(message);
+  });
+
   app.post('/chats/:chatId/retry', async (c) => {
     try {
       const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
       const request = RetryChatRouteSchema.parse(await c.req.json());
       const allMessages = await dependencies.messages.listByChatId(chat.id);
-      const lastAssistantIndex = allMessages.reduce((acc, m, i) => m.role === 'assistant' ? i : acc, -1);
+      const activeMessages = getActiveConversationMessages(allMessages);
+      const lastAssistant = [...activeMessages].reverse().find((message) => message.role === 'assistant');
 
-      if (lastAssistantIndex === -1) {
+      if (!lastAssistant) {
         return c.json({ error: 'No assistant message to retry' }, 400);
       }
 
-      await dependencies.messages.delete(allMessages[lastAssistantIndex].id);
-      const history = await dependencies.messages.listByChatId(chat.id);
+      const retryGroupId = lastAssistant.attemptGroupId ?? lastAssistant.id;
+      const history = allMessages.filter((message) => message.id !== lastAssistant.id && message.attemptGroupId !== retryGroupId);
       const providerConfig = await resolveProviderConfig(dependencies, chat, request.providerConfigId);
       const preset = await resolvePreset(dependencies, chat);
 
@@ -735,12 +746,16 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         settings,
       });
       const assistantMessage = await dependencies.messages.create({
+        attemptGroupId: retryGroupId,
+        attemptIndex: lastAssistant.attemptIndex + 1,
         chatId: chat.id,
         content: '',
+        isActiveAttempt: true,
         reasoningContent: '',
         role: 'assistant',
         state: 'streaming',
       });
+      await dependencies.messages.setActiveAttempt(assistantMessage.id);
       const adapter = dependencies.createProviderAdapter(providerConfig);
 
       return streamSSE(c, async (stream) => {
@@ -820,7 +835,8 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
       const request = RetryChatRouteSchema.parse(await c.req.json());
       const history = await dependencies.messages.listByChatId(chat.id);
-      const lastMessage = history.at(-1);
+      const activeMessages = getActiveConversationMessages(history);
+      const lastMessage = activeMessages.at(-1);
 
       if (!lastMessage || lastMessage.role !== 'assistant') {
         return c.json({ error: 'No assistant message to continue' }, 400);
@@ -842,10 +858,13 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         messages: [
           ...history,
           {
+            attemptGroupId: null,
+            attemptIndex: 0,
             chatId: chat.id,
             content: CONTINUE_PROMPT,
             createdAt: new Date().toISOString(),
             id: 'continue_prompt',
+            isActiveAttempt: true,
             reasoningContent: '',
             role: 'user',
             state: 'completed',
