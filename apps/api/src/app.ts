@@ -153,6 +153,7 @@ async function forwardAssistantStream(
   messageId: string,
   chunks: AsyncIterable<ProviderChunk>,
   adapter: ProviderAdapter,
+  userName: string,
 ): Promise<void> {
   let completed = false;
 
@@ -214,6 +215,20 @@ async function forwardAssistantStream(
   }
 
   if (completed) {
+    const message = await dependencies.messages.getById(messageId);
+
+    if (message && message.content) {
+      const truncateAt = findUsurpationPoint(message.content, userName);
+
+      if (truncateAt !== -1) {
+        const cleanContent = message.content.slice(0, truncateAt).trim();
+
+        if (cleanContent !== message.content) {
+          await dependencies.messages.updateContent(messageId, cleanContent);
+        }
+      }
+    }
+
     maybeSummarizeChat(dependencies, chatId, adapter).catch(() => {});
   }
 }
@@ -357,15 +372,47 @@ async function resolvePreset(
   return (await dependencies.presets.list())[0] ?? null;
 }
 
+function findUsurpationPoint(content: string, userName: string): number {
+  const patterns: string[] = [];
+  const trimmedName = userName.trim();
+
+  if (trimmedName) {
+    patterns.push(`\n\n${trimmedName}:`, `\n${trimmedName}:`, `\n\n${trimmedName} `, `\n${trimmedName} asked`, `\n${trimmedName} said`);
+  }
+
+  patterns.push('\n\nYou:', '\nYou:', '\n\nyou:', '\nyou:', '\n\nYou ', '\nYou ');
+
+  let earliest = -1;
+
+  for (const pattern of patterns) {
+    const idx = content.indexOf(pattern);
+    if (idx !== -1 && (earliest === -1 || idx < earliest)) {
+      earliest = idx;
+    }
+  }
+
+  return earliest;
+}
+
 function buildGenerationInput(
   promptPreview: PromptPreview,
   preset: Preset,
   providerConfig: ProviderConfig,
+  personaName: string,
   overrides: {
     maxOutputTokens?: number;
     temperature?: number;
   },
 ) {
+  const autoStop: string[] = [];
+  const trimmedName = personaName.trim();
+
+  if (trimmedName) {
+    autoStop.push(`\n${trimmedName}:`, `${trimmedName}:`);
+  }
+
+  autoStop.push('\nYou:', 'You:', '\nyou:', 'you:');
+
   const baseInput = {
     contextLength: preset.contextLength,
     frequencyPenalty: preset.frequencyPenalty,
@@ -375,7 +422,7 @@ function buildGenerationInput(
     presencePenalty: preset.presencePenalty,
     repeatPenalty: preset.repeatPenalty,
     seed: preset.seed,
-    stop: preset.stopStrings,
+    stop: [...preset.stopStrings, ...autoStop],
     temperature: overrides.temperature ?? preset.temperature,
     thinkingBudgetTokens: preset.thinkingBudgetTokens,
     topK: preset.topK,
@@ -807,11 +854,12 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         dependencies,
         chat.id,
         assistantMessage.id,
-        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
         adapter,
+        settings.personaName,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -862,11 +910,12 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         dependencies,
         chat.id,
         assistantMessage.id,
-        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
         adapter,
+        settings.personaName,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -949,11 +998,12 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         dependencies,
         chat.id,
         assistantMessage.id,
-        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
         adapter,
+        settings.personaName,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -1022,11 +1072,12 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         dependencies,
         chat.id,
         lastMessage.id,
-        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, {
+        adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
         adapter,
+        settings.personaName,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {

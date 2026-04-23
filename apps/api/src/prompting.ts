@@ -42,7 +42,7 @@ function resolveMacrosInCharacter(character: Character, userName: string): Chara
   };
 }
 
-function buildCharacterSystemPrompt(character: Character, systemPromptOverride: string): string {
+function buildCharacterSystemPrompt(character: Character, systemPromptOverride: string, userName: string): string {
   return compactSections([
     systemPromptOverride || `You are roleplaying as ${character.name}. Stay in character and respond naturally in conversation.`,
     character.description ? `Description:\n${character.description}` : undefined,
@@ -50,6 +50,7 @@ function buildCharacterSystemPrompt(character: Character, systemPromptOverride: 
     character.scenario ? `Scenario:\n${character.scenario}` : undefined,
     character.firstMessage ? `Opening line:\n${character.firstMessage}` : undefined,
     character.exampleDialogue ? `Example dialogue:\n${character.exampleDialogue}` : undefined,
+    `Important: Only write for ${character.name}. Never write dialogue, actions, thoughts, or responses for ${userName}. Provide exactly one reply and stop.`,
   ]);
 }
 
@@ -221,7 +222,7 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
     : '';
 
   const baseSystemPrompt = resolvedCharacter
-    ? buildCharacterSystemPrompt(resolvedCharacter, resolvedPresetSystemPrompt)
+    ? buildCharacterSystemPrompt(resolvedCharacter, resolvedPresetSystemPrompt, userName)
     : (resolvedPresetSystemPrompt || input.config.defaultAssistantSystemPrompt);
 
   const authorNoteDepth = input.authorNoteDepth ?? 0;
