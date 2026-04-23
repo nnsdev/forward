@@ -88,6 +88,18 @@ function getActiveConversationMessages(messages: Message[]): Message[] {
   return messages.filter((message) => message.role !== 'assistant' || message.isActiveAttempt !== false);
 }
 
+function filterSummarizedMessages(messages: Message[]): Message[] {
+  const coveredIds = new Set<string>();
+
+  for (const message of messages) {
+    for (const id of (message.summaryOf ?? [])) {
+      coveredIds.add(id);
+    }
+  }
+
+  return messages.filter((message) => !coveredIds.has(message.id));
+}
+
 function renderStoryStringTemplate(
   template: string,
   values: Record<string, string>,
@@ -188,7 +200,7 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
 
   const maxPromptTokens = input.preset.contextLength ?? DEFAULT_MAX_PROMPT_TOKENS;
 
-  const activeMessages = getActiveConversationMessages(input.messages);
+  const activeMessages = filterSummarizedMessages(getActiveConversationMessages(input.messages));
   const normalizedMessageModeHistory = normalizeMessageModeHistory(mergedSystemPrompt, activeMessages);
   const initialMessages = input.preset.instructTemplate
     ? [...activeMessages]

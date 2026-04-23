@@ -23,7 +23,7 @@ import {
   UpdateProviderConfigInputSchema,
 } from '@forward/shared';
 import type { Character, Chat, Preset, ProviderConfig } from '@forward/shared';
-import type { ProviderChunk } from '@forward/provider-core';
+import type { ProviderAdapter, ProviderChunk } from '@forward/provider-core';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
@@ -72,12 +72,82 @@ async function writeStreamEvent(
   });
 }
 
+const SUMMARY_MIN_MESSAGES = 10;
+const SUMMARY_BATCH_SIZE = 8;
+const SUMMARY_MAX_TOKENS = 200;
+
+async function maybeSummarizeChat(
+  dependencies: AppDependencies,
+  chatId: string,
+  adapter: ProviderAdapter,
+): Promise<void> {
+  try {
+    const allMessages = await dependencies.messages.listByChatId(chatId);
+    const coveredIds = new Set<string>();
+
+    for (const message of allMessages) {
+      for (const id of message.summaryOf) {
+        coveredIds.add(id);
+      }
+    }
+
+    const uncovered = allMessages.filter((message) => !coveredIds.has(message.id));
+
+    if (uncovered.length < SUMMARY_MIN_MESSAGES) {
+      return;
+    }
+
+    const toSummarize = uncovered.slice(0, SUMMARY_BATCH_SIZE);
+    const targetIds = new Set(toSummarize.map((message) => message.id));
+    const existingSummary = allMessages.find((message) =>
+      message.summaryOf.length === toSummarize.length
+      && message.summaryOf.every((id) => targetIds.has(id)),
+    );
+
+    if (existingSummary) {
+      return;
+    }
+
+    const transcript = toSummarize
+      .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
+      .join('\n\n');
+    const summaryPrompt = `Summarize the following conversation concisely. Include key events, decisions, and emotional beats. Do not add meta-commentary.\n\n${transcript}`;
+    let summaryText = '';
+
+    for await (const chunk of adapter.streamGenerate({
+      maxOutputTokens: SUMMARY_MAX_TOKENS,
+      messages: [{ content: summaryPrompt, role: 'user' }],
+      temperature: 0.3,
+    })) {
+      if (chunk.kind === 'content' && chunk.text) {
+        summaryText += chunk.text;
+      }
+    }
+
+    summaryText = summaryText.trim();
+
+    if (!summaryText) {
+      return;
+    }
+
+    await dependencies.messages.create({
+      chatId,
+      content: summaryText,
+      role: 'system',
+      summaryOf: toSummarize.map((message) => message.id),
+    });
+  } catch {
+    // Silently ignore summary failures
+  }
+}
+
 async function forwardAssistantStream(
   stream: Parameters<typeof streamSSE>[1] extends (stream: infer T) => Promise<void> ? T : never,
   dependencies: AppDependencies,
   chatId: string,
   messageId: string,
   chunks: AsyncIterable<ProviderChunk>,
+  adapter: ProviderAdapter,
 ): Promise<void> {
   let completed = false;
 
@@ -136,6 +206,10 @@ async function forwardAssistantStream(
       messageId,
       type: 'response.error',
     });
+  }
+
+  if (completed) {
+    maybeSummarizeChat(dependencies, chatId, adapter).catch(() => {});
   }
 }
 
@@ -729,6 +803,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
+        adapter,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -814,6 +889,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
+        adapter,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -865,6 +941,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
             reasoningContent: '',
             role: 'user',
             state: 'completed',
+            summaryOf: [],
             updatedAt: new Date().toISOString(),
           },
         ],
@@ -884,6 +961,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
         })),
+        adapter,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {

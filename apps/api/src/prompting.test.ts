@@ -118,6 +118,7 @@ describe('buildPromptPreview', () => {
         reasoningContent: '',
         role: index % 2 === 0 ? 'user' : 'assistant',
         state: 'completed' as const,
+        summaryOf: [],
         updatedAt: new Date().toISOString(),
       })),
       preset: {
@@ -209,6 +210,7 @@ describe('buildPromptPreview', () => {
           reasoningContent: '',
           role: 'assistant',
           state: 'completed',
+          summaryOf: [],
           updatedAt: '2026-04-22T00:00:00.000Z',
         },
         {
@@ -222,6 +224,7 @@ describe('buildPromptPreview', () => {
           reasoningContent: '',
           role: 'user',
           state: 'completed',
+          summaryOf: [],
           updatedAt: '2026-04-22T00:00:01.000Z',
         },
       ],

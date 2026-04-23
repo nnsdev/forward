@@ -68,6 +68,7 @@ export const messages = sqliteTable('messages', {
   content: text('content').notNull(),
   reasoningContent: text('reasoning_content').notNull().default(''),
   state: text('state').notNull(),
+  summaryOf: text('summary_of').notNull().default(''),
   tokenEstimate: integer('token_estimate'),
   ...timestamps,
 });

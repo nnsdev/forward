@@ -1,6 +1,41 @@
 <template>
   <div
-    v-if="role === 'assistant'"
+    v-if="isCovered && !expanded"
+    class="rp-animate-enter flex justify-center py-1"
+  >
+    <button
+      type="button"
+      class="rounded-full border border-white/[0.04] bg-white/[0.02] px-2.5 py-0.5 text-[10px] text-white/20 transition hover:text-white/45"
+      @click="expanded = true"
+    >
+      Summarized
+    </button>
+  </div>
+
+  <div
+    v-else-if="isSummary"
+    class="group relative rp-animate-enter"
+  >
+    <div class="rounded-lg border border-white/[0.04] bg-white/[0.015] px-4 py-2.5">
+      <div class="flex items-center gap-2">
+        <span class="rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/25">Summary</span>
+        <p class="text-[13px] italic text-white/50">{{ content }}</p>
+      </div>
+    </div>
+    <div v-if="messageId" class="absolute -top-1 right-0 flex gap-1 opacity-0 transition group-hover:opacity-100">
+      <button
+        type="button"
+        class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-rose-300/70"
+        title="Delete"
+        @click="$emit('delete', messageId)"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5.3 4V2.7a.7.7 0 0 1 .7-.7h4a.7.7 0 0 1 .7.7V4m2 0v9.3a.7.7 0 0 1-.7.7H4a.7.7 0 0 1-.7-.7V4"/><path d="M6 7v5M10 7v5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div
+    v-else-if="role === 'assistant'"
     class="group relative flex gap-3 rp-animate-enter"
   >
     <div
@@ -137,6 +172,8 @@ const props = defineProps<{
   userName?: string;
   userAvatarPath?: string | null;
   messageId?: string;
+  isSummary?: boolean;
+  isCovered?: boolean;
 }>();
 
 defineEmits<{
@@ -146,6 +183,7 @@ defineEmits<{
 }>();
 
 const reasoningOpen = ref(false);
+const expanded = ref(false);
 
 const hasReasoning = computed(() => Boolean(props.reasoning?.trim()));
 const displayName = computed(() => props.characterName || 'Assistant');

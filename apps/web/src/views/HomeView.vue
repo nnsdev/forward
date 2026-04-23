@@ -198,6 +198,8 @@
               :character-avatar-path="entry.message.role === 'assistant' ? chatStore.activeCharacter?.avatarAssetPath : undefined"
               :user-name="entry.message.role === 'user' ? chatStore.appSettings?.personaName : undefined"
               :user-avatar-path="entry.message.role === 'user' ? chatStore.appSettings?.personaAvatarAssetPath : undefined"
+              :is-summary="entry.message.summaryOf.length > 0"
+              :is-covered="coveredMessageIds.has(entry.message.id)"
               @retry="handleRetry"
               @delete="handleDeleteMessage"
               @select-attempt="handleSelectAttempt"
@@ -948,6 +950,18 @@ interface DisplayMessageEntry {
   nextAttemptId?: string | null;
   previousAttemptId?: string | null;
 }
+
+const coveredMessageIds = computed(() => {
+  const ids = new Set<string>();
+
+  for (const message of chatStore.activeMessages) {
+    for (const id of message.summaryOf) {
+      ids.add(id);
+    }
+  }
+
+  return ids;
+});
 
 const displayMessages = computed<DisplayMessageEntry[]>(() => {
   const seenAttemptGroups = new Set<string>();

@@ -126,6 +126,7 @@ export const MessageSchema = z.object({
   content: z.string(),
   reasoningContent: z.string().default(''),
   state: MessageStateSchema,
+  summaryOf: z.array(z.string()).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

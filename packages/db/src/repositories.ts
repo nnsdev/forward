@@ -67,6 +67,7 @@ export interface CreateMessageInput {
   reasoningContent?: string;
   role: MessageRole;
   state?: MessageState;
+  summaryOf?: string[];
 }
 
 export interface MessageRepository {
@@ -170,6 +171,7 @@ function mapMessage(row: typeof messages.$inferSelect): Message {
     reasoningContent: row.reasoningContent,
     role: row.role,
     state: row.state,
+    summaryOf: row.summaryOf ? JSON.parse(row.summaryOf) as string[] : [],
     updatedAt: row.updatedAt,
   });
 }
@@ -693,6 +695,7 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
           reasoningContent: input.reasoningContent ?? '',
           role: input.role,
           state: input.state ?? 'completed',
+          summaryOf: input.summaryOf ? JSON.stringify(input.summaryOf) : '',
           tokenEstimate: null,
           updatedAt: timestamp,
         })

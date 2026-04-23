@@ -107,6 +107,7 @@ export const useChatStore = defineStore('chat', {
           reasoningContent: '',
           role: 'assistant',
           state: 'streaming',
+          summaryOf: [],
           updatedAt: new Date().toISOString(),
         });
       }
@@ -332,6 +333,7 @@ export const useChatStore = defineStore('chat', {
         reasoningContent: '',
         role: 'user',
         state: 'pending',
+        summaryOf: [],
         updatedAt: new Date().toISOString(),
       };
 
