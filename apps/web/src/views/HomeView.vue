@@ -203,6 +203,7 @@
               @retry="handleRetry"
               @delete="handleDeleteMessage"
               @select-attempt="handleSelectAttempt"
+              @edit="handleEditMessage"
             />
           </div>
           <div v-if="chatStore.generating" class="mt-4 flex items-center gap-2 text-xs text-white/20">
@@ -1350,6 +1351,10 @@ async function handleRetry(messageId: string) {
 
 async function handleDeleteMessage(messageId: string) {
   await chatStore.deleteMessage(messageId);
+}
+
+async function handleEditMessage(messageId: string, content: string) {
+  await chatStore.updateMessage(messageId, content);
 }
 
 async function handleSelectAttempt(messageId: string) {

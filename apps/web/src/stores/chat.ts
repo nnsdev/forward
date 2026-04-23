@@ -412,6 +412,18 @@ export const useChatStore = defineStore('chat', {
       await api.selectMessageAttempt(messageId);
       await this.loadMessages(chatId);
     },
+    async updateMessage(messageId: string, content: string) {
+      const chatId = this.activeChatId;
+
+      if (!chatId) {
+        return;
+      }
+
+      const updated = await api.updateMessage(messageId, { content });
+      this.messagesByChatId[chatId] = (this.messagesByChatId[chatId] ?? []).map((message) =>
+        message.id === updated.id ? updated : message,
+      );
+    },
     async renameChat(chatId: string, title: string) {
       const chat = await api.updateChat(chatId, { title });
       this.chats = this.chats.map((c) => (c.id === chat.id ? chat : c));

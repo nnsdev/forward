@@ -72,9 +72,9 @@ async function writeStreamEvent(
   });
 }
 
-const SUMMARY_MIN_MESSAGES = 10;
 const SUMMARY_BATCH_SIZE = 8;
 const SUMMARY_MAX_TOKENS = 200;
+const SUMMARY_MIN_TOKENS = 2500;
 
 async function maybeSummarizeChat(
   dependencies: AppDependencies,
@@ -93,11 +93,19 @@ async function maybeSummarizeChat(
 
     const uncovered = allMessages.filter((message) => !coveredIds.has(message.id));
 
-    if (uncovered.length < SUMMARY_MIN_MESSAGES) {
+    if (uncovered.length < SUMMARY_BATCH_SIZE) {
       return;
     }
 
     const toSummarize = uncovered.slice(0, SUMMARY_BATCH_SIZE);
+    const transcript = toSummarize
+      .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
+      .join('\n\n');
+
+    if ((await adapter.countTokens(transcript)) < SUMMARY_MIN_TOKENS) {
+      return;
+    }
+
     const targetIds = new Set(toSummarize.map((message) => message.id));
     const existingSummary = allMessages.find((message) =>
       message.summaryOf.length === toSummarize.length
@@ -108,9 +116,6 @@ async function maybeSummarizeChat(
       return;
     }
 
-    const transcript = toSummarize
-      .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
-      .join('\n\n');
     const summaryPrompt = `Summarize the following conversation concisely. Include key events, decisions, and emotional beats. Do not add meta-commentary.\n\n${transcript}`;
     let summaryText = '';
 

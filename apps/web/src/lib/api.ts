@@ -19,6 +19,7 @@ import type {
   UpdateCharacterInput,
   UpdateChatInput,
   UpdateAppSettingsInput,
+  UpdateMessageContentInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
 } from '@forward/shared';
@@ -142,6 +143,12 @@ export const api = {
   async selectMessageAttempt(messageId: string): Promise<Message> {
     return expectJson<Message>(`/messages/${messageId}/select-attempt`, {
       method: 'POST',
+    });
+  },
+  async updateMessage(messageId: string, input: UpdateMessageContentInput): Promise<Message> {
+    return expectJson<Message>(`/messages/${messageId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
     });
   },
   async generate(chatId: string, input: GenerateChatInput, onEvent: (event: NormalizedStreamEvent) => void, signal?: AbortSignal): Promise<void> {
