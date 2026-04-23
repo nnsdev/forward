@@ -57,6 +57,7 @@ describe('chat store', () => {
       name: 'Balanced',
       stopStrings: [],
       temperature: 0.7,
+      thinkingBudgetTokens: null,
       topK: 40,
       topP: 0.9,
     };
@@ -190,6 +191,7 @@ describe('chat store', () => {
       name: 'Balanced',
       stopStrings: [],
       temperature: 0.7,
+      thinkingBudgetTokens: null,
       topK: 40,
       topP: 0.9,
     };
@@ -361,6 +363,7 @@ describe('chat store', () => {
       name: 'Balanced',
       stopStrings: [],
       temperature: 0.7,
+      thinkingBudgetTokens: null,
       topK: 40,
       topP: 0.9,
     };

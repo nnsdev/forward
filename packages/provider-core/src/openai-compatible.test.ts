@@ -52,4 +52,23 @@ describe('createOpenAICompatibleAdapter', () => {
     );
     expect(chunks).toContainEqual({ kind: 'content', text: 'Hello world' });
   });
+
+  it('forwards thinking budget tokens when provided', async () => {
+    const fetchFn = vi.fn(async () => new Response('data: [DONE]\n\n', { status: 200 }));
+    const adapter = createOpenAICompatibleAdapter({ config: providerConfig, fetchFn: fetchFn as typeof fetch });
+
+    for await (const _chunk of adapter.streamGenerate({
+      maxOutputTokens: 128,
+      messages: [{ content: 'Hello', role: 'user' }],
+      thinkingBudgetTokens: 64,
+    })) {
+      void _chunk;
+    }
+
+    const calls = fetchFn.mock.calls as unknown as Array<[unknown, { body?: string } | undefined]>;
+    const firstCall = calls[0];
+    expect(firstCall).toBeTruthy();
+    const requestInit = firstCall?.[1] ?? {};
+    expect(requestInit.body).toContain('"thinking_budget_tokens":64');
+  });
 });

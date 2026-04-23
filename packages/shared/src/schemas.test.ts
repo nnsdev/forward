@@ -80,6 +80,7 @@ describe('CreatePresetInputSchema', () => {
     expect(result.repeatPenalty).toBe(1);
     expect(result.seed).toBeNull();
     expect(result.systemPrompt).toBe('');
+    expect(result.thinkingBudgetTokens).toBeNull();
   });
 
   it('accepts all fields explicitly', () => {
@@ -123,6 +124,7 @@ describe('PresetSchema', () => {
       stopStrings: [],
       systemPrompt: '',
       temperature: 0.7,
+      thinkingBudgetTokens: null,
       topK: 40,
       topP: 0.9,
     });

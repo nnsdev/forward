@@ -29,7 +29,7 @@
             <p class="mt-1 text-[11px] leading-5 text-white/35">
               template {{ preview.templateName }}<br>
               temp {{ preview.preset.temperature }} &middot; top_p {{ preview.preset.topP }} &middot; top_k {{ preview.preset.topK }} &middot; min_p {{ preview.preset.minP }}<br>
-              ctx {{ preview.preset.contextLength }} &middot; max {{ preview.preset.maxOutputTokens }} &middot; rep {{ preview.preset.repeatPenalty }} &middot; freq {{ preview.preset.frequencyPenalty }} &middot; pres {{ preview.preset.presencePenalty }}<br>
+              ctx {{ preview.preset.contextLength }} &middot; max {{ preview.preset.maxOutputTokens }} &middot; rep {{ preview.preset.repeatPenalty }} &middot; freq {{ preview.preset.frequencyPenalty }} &middot; pres {{ preview.preset.presencePenalty }}<span v-if="preview.preset.thinkingBudgetTokens !== null"> &middot; think {{ preview.preset.thinkingBudgetTokens }}</span><br>
               <template v-if="preview.preset.seed !== null">seed {{ preview.preset.seed }}</template><template v-else>seed random</template>
             </p>
           </article>

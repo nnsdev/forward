@@ -35,6 +35,7 @@ async function createTestApp() {
     stopStrings: [],
     systemPrompt: '',
     temperature: 0.7,
+    thinkingBudgetTokens: null,
     topK: 40,
     topP: 0.9,
   });

@@ -204,6 +204,7 @@ function buildGenerationInput(
     seed: preset.seed,
     stop: preset.stopStrings,
     temperature: overrides.temperature ?? preset.temperature,
+    thinkingBudgetTokens: preset.thinkingBudgetTokens,
     topK: preset.topK,
     topP: preset.topP,
   };

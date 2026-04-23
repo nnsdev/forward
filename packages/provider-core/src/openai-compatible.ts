@@ -208,6 +208,10 @@ function buildChatCompletionBody(config: ProviderConfig, input: StreamGenerateIn
     body.stop = input.stop;
   }
 
+  if (input.thinkingBudgetTokens !== undefined && input.thinkingBudgetTokens !== null) {
+    body.thinking_budget_tokens = input.thinkingBudgetTokens;
+  }
+
   return body;
 }
 
@@ -257,6 +261,10 @@ function buildCompletionBody(config: ProviderConfig, input: StreamGenerateInput 
 
   if (input.stop?.length) {
     body.stop = input.stop;
+  }
+
+  if (input.thinkingBudgetTokens !== undefined && input.thinkingBudgetTokens !== null) {
+    body.thinking_budget_tokens = input.thinkingBudgetTokens;
   }
 
   return body;

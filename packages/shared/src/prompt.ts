@@ -20,6 +20,7 @@ export const PromptPreviewSchema = z.object({
     seed: z.number().int().nullable(),
     stopStrings: z.array(z.string()),
     temperature: z.number(),
+    thinkingBudgetTokens: z.number().int().nonnegative().nullable(),
     topK: z.number().int().nonnegative(),
     topP: z.number(),
   }),

@@ -30,6 +30,7 @@ export function buildPresetImportBase(config: AppConfig, preset: Preset | null):
       stopStrings: [...preset.stopStrings],
       systemPrompt: preset.systemPrompt,
       temperature: preset.temperature,
+      thinkingBudgetTokens: preset.thinkingBudgetTokens,
       topK: preset.topK,
       topP: preset.topP,
     };
@@ -48,6 +49,7 @@ export function buildPresetImportBase(config: AppConfig, preset: Preset | null):
     stopStrings: [...config.defaultPresetStopStrings],
     systemPrompt: config.defaultPresetSystemPrompt,
     temperature: config.defaultPresetTemperature,
+    thinkingBudgetTokens: null,
     topK: config.defaultPresetTopK,
     topP: config.defaultPresetTopP,
   };

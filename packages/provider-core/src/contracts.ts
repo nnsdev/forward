@@ -27,6 +27,7 @@ interface StreamGenerateBaseInput {
   seed?: number | null;
   stop?: string[];
   temperature?: number;
+  thinkingBudgetTokens?: number | null;
   topK?: number;
   topP?: number;
 }

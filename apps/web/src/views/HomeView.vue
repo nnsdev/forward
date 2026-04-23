@@ -524,6 +524,18 @@
                   type="number"
                 />
               </div>
+              <div>
+                <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Thinking budget</label>
+                <input
+                  :value="presetForm.thinkingBudgetTokens ?? ''"
+                  class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-1.5 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                  min="0"
+                  placeholder="Unlimited"
+                  step="1"
+                  type="number"
+                  @input="updateThinkingBudget"
+                />
+              </div>
             </div>
             <div class="flex gap-2">
               <button class="flex-1 rounded-lg border border-white/8 px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white" type="submit">
@@ -573,11 +585,11 @@
                   </button>
                 </div>
               </div>
-              <p class="mt-0.5 text-[11px] text-white/25">
+                <p class="mt-0.5 text-[11px] text-white/25">
                   temp {{ preset.temperature }} &middot; max {{ preset.maxOutputTokens }} &middot; ctx {{ preset.contextLength }} &middot; top_p {{ preset.topP }} &middot; top_k {{ preset.topK }} &middot; min_p {{ preset.minP }}
                 </p>
                 <p class="text-[11px] text-white/20">
-                  {{ preset.instructTemplate?.name ?? 'Chat messages' }}
+                  {{ preset.instructTemplate?.name ?? 'Chat messages' }}<span v-if="preset.thinkingBudgetTokens !== null"> &middot; think {{ preset.thinkingBudgetTokens }}</span>
                 </p>
               </div>
             </div>
@@ -846,6 +858,7 @@ const presetForm = reactive<CreatePresetInput>({
   stopStrings: [],
   systemPrompt: '',
   temperature: 0.7,
+  thinkingBudgetTokens: null,
   topK: 40,
   topP: 0.9,
 });
@@ -1062,7 +1075,13 @@ function resetPresetForm() {
   presetForm.repeatPenalty = 1;
   presetForm.seed = null;
   presetForm.contextLength = 131072;
+  presetForm.thinkingBudgetTokens = null;
   presetForm.stopStrings = [];
+}
+
+function updateThinkingBudget(event: Event) {
+  const value = (event.target as HTMLInputElement).value;
+  presetForm.thinkingBudgetTokens = value === '' ? null : Number(value);
 }
 
 function cloneTemplate(template: InstructTemplate): InstructTemplate {
@@ -1098,6 +1117,7 @@ function editPreset(presetId: string) {
   presetForm.repeatPenalty = preset.repeatPenalty;
   presetForm.seed = preset.seed;
   presetForm.contextLength = preset.contextLength;
+  presetForm.thinkingBudgetTokens = preset.thinkingBudgetTokens;
   presetForm.stopStrings = [...preset.stopStrings];
 }
 

@@ -257,6 +257,7 @@ export function buildPromptPreview(input: BuildPromptInput): PromptPreview {
       seed: input.preset.seed,
       stopStrings: input.preset.stopStrings,
       temperature: input.preset.temperature,
+      thinkingBudgetTokens: input.preset.thinkingBudgetTokens,
       topK: input.preset.topK,
       topP: input.preset.topP,
     },

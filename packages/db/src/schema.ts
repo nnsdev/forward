@@ -21,6 +21,7 @@ export const presets = sqliteTable('presets', {
   name: text('name').notNull(),
   systemPrompt: text('system_prompt').notNull().default(''),
   instructTemplateJson: text('instruct_template_json').notNull().default(''),
+  thinkingBudgetTokens: integer('thinking_budget_tokens').$type<number | null>(),
   temperature: real('temperature').notNull(),
   topP: real('top_p').notNull(),
   topK: integer('top_k').notNull(),

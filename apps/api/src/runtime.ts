@@ -60,6 +60,7 @@ export async function createAppDependencies(config: AppConfig): Promise<AppDepen
     stopStrings: config.defaultPresetStopStrings,
     systemPrompt: config.defaultPresetSystemPrompt,
     temperature: config.defaultPresetTemperature,
+    thinkingBudgetTokens: null,
     topK: config.defaultPresetTopK,
     topP: config.defaultPresetTopP,
   });
