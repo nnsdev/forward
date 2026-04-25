@@ -1,4 +1,4 @@
-import type { AppSettings, Character, InstructTemplate, Message, Preset, PromptPreview, ProviderConfig } from '@forward/shared';
+import type { AppSettings, Character, CharacterState, InstructTemplate, Message, Preset, PromptPreview, ProviderConfig, Scene } from '@forward/shared';
 import { PLAIN_TEMPLATE } from '@forward/shared';
 
 import type { AppConfig } from './config';
@@ -9,19 +9,31 @@ interface BuildPromptInput {
   authorNote?: string;
   authorNoteDepth?: number;
   character: Character | null;
+  characterStates?: CharacterState[];
   chatId: string;
   config: AppConfig;
   countTokens(text: string): Promise<number>;
   messages: Message[];
   preset: Preset;
   provider: ProviderConfig;
+  scene?: Scene | null;
   settings: AppSettings;
 }
 
-function resolveMacros(text: string, characterName: string, userName: string): string {
-  return text
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function resolveMacros(text: string, characterName: string, userName: string, states: CharacterState[] = []): string {
+  let result = text
     .replace(/\{\{char\}\}/g, characterName)
     .replace(/\{\{user\}\}/g, userName);
+
+  for (const state of states) {
+    result = result.replace(new RegExp(`\\{\\{state:${escapeRegex(state.key)}\\}\\}`, 'g'), state.value);
+  }
+
+  return result;
 }
 
 function compactSections(parts: Array<string | undefined>): string {
@@ -31,14 +43,14 @@ function compactSections(parts: Array<string | undefined>): string {
     .join('\n\n');
 }
 
-function resolveMacrosInCharacter(character: Character, userName: string): Character {
+function resolveMacrosInCharacter(character: Character, userName: string, states: CharacterState[] = []): Character {
   return {
     ...character,
-    description: resolveMacros(character.description, character.name, userName),
-    exampleDialogue: resolveMacros(character.exampleDialogue, character.name, userName),
-    firstMessage: resolveMacros(character.firstMessage, character.name, userName),
-    personality: resolveMacros(character.personality, character.name, userName),
-    scenario: resolveMacros(character.scenario, character.name, userName),
+    description: resolveMacros(character.description, character.name, userName, states),
+    exampleDialogue: resolveMacros(character.exampleDialogue, character.name, userName, states),
+    firstMessage: resolveMacros(character.firstMessage, character.name, userName, states),
+    personality: resolveMacros(character.personality, character.name, userName, states),
+    scenario: resolveMacros(character.scenario, character.name, userName, states),
   };
 }
 
@@ -62,6 +74,35 @@ function buildPersonaSection(settings: AppSettings): string | undefined {
   return compactSections([
     settings.personaName.trim() ? `User name:\n${settings.personaName.trim()}` : undefined,
     settings.personaDescription.trim() ? `User persona:\n${settings.personaDescription.trim()}` : undefined,
+  ]);
+}
+
+function buildStructuredModeInstruction(characterName: string, characterStates: CharacterState[]): string {
+  const exampleStateUpdates = characterStates.length > 0
+    ? Object.fromEntries(characterStates.map((s) => [s.key, s.value]))
+    : { example_key: 'example_value' };
+
+  const example = {
+    content: `Your natural in-character response. Stay in character and only write for ${characterName}.`,
+    scene_update: {
+      description: 'Scene description',
+      title: 'Scene title',
+    },
+    state_updates: exampleStateUpdates,
+  };
+
+  const jsonExample = JSON.stringify(example, null, 2);
+
+  return compactSections([
+    '[STRUCTURED MODE]',
+    'You must respond ONLY in valid JSON with this exact structure:',
+    jsonExample,
+    'Rules:',
+    '- Output ONLY the JSON object. No markdown fences, no extra text.',
+    '- In content, stay in character. Only write for ' + characterName + '.',
+    '- state_updates values should be short strings (1-3 words or numbers).',
+    '- scene_update should only be used when the location or situation meaningfully changes.',
+    '- Only include fields you want to update. Omit unchanged state keys and omit scene_update entirely if the scene has not changed.',
   ]);
 }
 
@@ -210,15 +251,16 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
   const template = resolveTemplate(input.preset);
   const characterName = input.character?.name ?? 'Assistant';
   const userName = input.settings.personaName.trim() || 'User';
+  const states = input.characterStates ?? [];
 
   const resolvedCharacter = input.character
-    ? resolveMacrosInCharacter(input.character, userName)
+    ? resolveMacrosInCharacter(input.character, userName, states)
     : null;
   const resolvedAuthorNote = input.authorNote?.trim()
-    ? resolveMacros(input.authorNote.trim(), characterName, userName)
+    ? resolveMacros(input.authorNote.trim(), characterName, userName, states)
     : undefined;
   const resolvedPresetSystemPrompt = input.preset.systemPrompt
-    ? resolveMacros(input.preset.systemPrompt, characterName, userName)
+    ? resolveMacros(input.preset.systemPrompt, characterName, userName, states)
     : '';
 
   const baseSystemPrompt = resolvedCharacter
@@ -227,9 +269,17 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
 
   const authorNoteDepth = input.authorNoteDepth ?? 0;
   const shouldInjectAuthorNoteIntoSystem = authorNoteDepth === 0 && resolvedAuthorNote;
+  const sceneSection = input.scene?.title?.trim()
+    ? `Current scene: ${input.scene.title}${input.scene.description?.trim() ? '\n' + input.scene.description : ''}`
+    : undefined;
+  const structuredInstruction = input.preset.structuredMode && resolvedCharacter
+    ? buildStructuredModeInstruction(resolvedCharacter.name, states)
+    : undefined;
   const mergedSystemPrompt = compactSections([
     baseSystemPrompt,
     buildPersonaSection(input.settings),
+    sceneSection,
+    structuredInstruction,
     shouldInjectAuthorNoteIntoSystem ? `Author's note:\n${resolvedAuthorNote}` : undefined,
   ]);
 
@@ -324,6 +374,7 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
       repeatPenalty: input.preset.repeatPenalty,
       seed: input.preset.seed,
       stopStrings: input.preset.stopStrings,
+      structuredMode: input.preset.structuredMode,
       temperature: input.preset.temperature,
       thinkingBudgetTokens: input.preset.thinkingBudgetTokens,
       topK: input.preset.topK,

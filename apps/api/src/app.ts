@@ -4,9 +4,11 @@ import {
   CharacterSchema,
   ChatSchema,
   CreateCharacterInputSchema,
+  CreateCharacterStateInputSchema,
   CreateChatInputSchema,
   CreatePresetInputSchema,
   CreateProviderConfigInputSchema,
+  CreateSceneInputSchema,
   GenerateChatInputSchema,
   LoginRequestSchema,
   MessageSchema,
@@ -15,12 +17,16 @@ import {
   PromptPreviewSchema,
   LiveStreamRequestSchema,
   RetryChatInputSchema,
+  SceneSchema,
+  CharacterStateSchema,
   SessionResponseSchema,
   StreamEventSchema,
   UpdateAppSettingsInputSchema,
   UpdateChatInputSchema,
   UpdateMessageContentSchema,
   UpdateProviderConfigInputSchema,
+  UpdateSceneInputSchema,
+  UpdateCharacterStateInputSchema,
 } from '@forward/shared';
 import type { Character, Chat, Preset, ProviderConfig } from '@forward/shared';
 import type { ProviderAdapter, ProviderChunk } from '@forward/provider-core';
@@ -146,16 +152,91 @@ async function maybeSummarizeChat(
   }
 }
 
+interface StructuredResponse {
+  content: string;
+  sceneUpdate?: { description: string; title: string };
+  stateUpdates?: Record<string, string>;
+}
+
+function extractJsonObject(text: string): string | null {
+  // Try the whole text first
+  try {
+    JSON.parse(text);
+    return text;
+  } catch {
+    // Fall through to brace matching
+  }
+
+  let depth = 0;
+  let start = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (char === '{') {
+      if (depth === 0) {
+        start = i;
+      }
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseStructuredResponse(raw: string): StructuredResponse | null {
+  const trimmed = raw.trim();
+
+  // Try to extract JSON from markdown fences first
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  const jsonText = fenceMatch ? fenceMatch[1] : trimmed;
+
+  const extracted = extractJsonObject(jsonText);
+
+  if (!extracted) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(extracted);
+
+    if (typeof parsed.content !== 'string') {
+      return null;
+    }
+
+    return {
+      content: parsed.content,
+      sceneUpdate: parsed.scene_update && typeof parsed.scene_update === 'object' ? {
+        description: String(parsed.scene_update.description ?? ''),
+        title: String(parsed.scene_update.title ?? ''),
+      } : undefined,
+      stateUpdates: parsed.state_updates && typeof parsed.state_updates === 'object'
+        ? Object.fromEntries(Object.entries(parsed.state_updates).map(([k, v]) => [k, String(v)]))
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function forwardAssistantStream(
   stream: Parameters<typeof streamSSE>[1] extends (stream: infer T) => Promise<void> ? T : never,
   dependencies: AppDependencies,
-  chatId: string,
+  chat: Chat,
   messageId: string,
   chunks: AsyncIterable<ProviderChunk>,
   adapter: ProviderAdapter,
   userName: string,
+  preset: Preset,
 ): Promise<void> {
   let completed = false;
+  let rawContent = '';
+  const chatId = chat.id;
 
   await writeStreamEvent(stream, {
     chatId,
@@ -177,6 +258,7 @@ async function forwardAssistantStream(
 
       if (chunk.kind === 'content' && chunk.text) {
         await dependencies.messages.appendContent(messageId, chunk.text);
+        rawContent += chunk.text;
         await writeStreamEvent(stream, {
           chatId,
           messageId,
@@ -187,16 +269,85 @@ async function forwardAssistantStream(
 
       if (chunk.kind === 'done' && !completed) {
         completed = true;
-        await dependencies.messages.updateState(messageId, 'completed');
-        await writeStreamEvent(stream, {
-          chatId,
-          messageId,
-          type: 'response.completed',
-        });
       }
     }
 
-    if (!completed) {
+    if (completed) {
+      await dependencies.messages.updateState(messageId, 'completed');
+
+      // Structured mode parsing and update application
+      if (preset.structuredMode && rawContent.trim()) {
+        const structured = parseStructuredResponse(rawContent);
+
+        if (structured) {
+          await dependencies.messages.updateContent(messageId, structured.content);
+
+          if (structured.stateUpdates && chat.characterId) {
+            const existingStates = await dependencies.characterStates.listByCharacterId(chat.characterId);
+
+            for (const [key, value] of Object.entries(structured.stateUpdates)) {
+              const existing = existingStates.find((s) => s.key === key);
+
+              if (existing) {
+                await dependencies.characterStates.update(existing.id, { value });
+              } else {
+                await dependencies.characterStates.create({ characterId: chat.characterId, key, value });
+              }
+            }
+          }
+
+          if (structured.sceneUpdate) {
+            const scenes = await dependencies.scenes.listByChatId(chat.id);
+            const activeScene = scenes.find((s) => s.isActive);
+
+            if (activeScene) {
+              await dependencies.scenes.update(activeScene.id, {
+                description: structured.sceneUpdate.description,
+                title: structured.sceneUpdate.title,
+              });
+            } else {
+              await dependencies.scenes.create({
+                chatId: chat.id,
+                description: structured.sceneUpdate.description,
+                sortOrder: scenes.length,
+                title: structured.sceneUpdate.title,
+              });
+            }
+          }
+
+          await writeStreamEvent(stream, {
+            chatId,
+            messageId,
+            sceneUpdate: structured.sceneUpdate,
+            stateUpdates: structured.stateUpdates,
+            type: 'metadata.updates',
+          });
+        }
+      }
+
+      // Usurpation check on clean content
+      const message = await dependencies.messages.getById(messageId);
+
+      if (message?.content) {
+        const truncateAt = findUsurpationPoint(message.content, userName);
+
+        if (truncateAt !== -1) {
+          const cleanContent = message.content.slice(0, truncateAt).trim();
+
+          if (cleanContent !== message.content) {
+            await dependencies.messages.updateContent(messageId, cleanContent);
+          }
+        }
+      }
+
+      await writeStreamEvent(stream, {
+        chatId,
+        messageId,
+        type: 'response.completed',
+      });
+
+      maybeSummarizeChat(dependencies, chatId, adapter).catch(() => {});
+    } else {
       await dependencies.messages.updateState(messageId, 'completed');
       await writeStreamEvent(stream, {
         chatId,
@@ -212,24 +363,6 @@ async function forwardAssistantStream(
       messageId,
       type: 'response.error',
     });
-  }
-
-  if (completed) {
-    const message = await dependencies.messages.getById(messageId);
-
-    if (message && message.content) {
-      const truncateAt = findUsurpationPoint(message.content, userName);
-
-      if (truncateAt !== -1) {
-        const cleanContent = message.content.slice(0, truncateAt).trim();
-
-        if (cleanContent !== message.content) {
-          await dependencies.messages.updateContent(messageId, cleanContent);
-        }
-      }
-    }
-
-    maybeSummarizeChat(dependencies, chatId, adapter).catch(() => {});
   }
 }
 
@@ -319,6 +452,11 @@ const CreateMessageRouteSchema = z.object({
 const UpdatePresetRouteSchema = CreatePresetInputSchema.partial().extend({
   name: z.string().min(1).optional(),
 });
+
+const UpdateSceneRouteSchema = UpdateSceneInputSchema;
+const UpdateCharacterStateRouteSchema = UpdateCharacterStateInputSchema;
+const CreateSceneRouteSchema = CreateSceneInputSchema;
+const CreateCharacterStateRouteSchema = CreateCharacterStateInputSchema;
 
 async function getRequiredChat(dependencies: AppDependencies, chatId: string): Promise<Chat> {
   const chat = await dependencies.chats.getById(chatId);
@@ -513,6 +651,10 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
   app.use('/chats/*', requireAuth(config));
   app.use('/messages', requireAuth(config));
   app.use('/messages/*', requireAuth(config));
+  app.use('/scenes', requireAuth(config));
+  app.use('/scenes/*', requireAuth(config));
+  app.use('/character-states', requireAuth(config));
+  app.use('/character-states/*', requireAuth(config));
   app.use('/settings', requireAuth(config));
   app.use('/settings/*', requireAuth(config));
   app.use('/debug/*', requireAuth(config));
@@ -559,6 +701,31 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
   app.delete('/characters/:characterId', async (c) => {
     await dependencies.characters.delete(c.req.param('characterId'));
 
+    return c.body(null, 204);
+  });
+
+  app.get('/characters/:characterId/states', async (c) => {
+    const character = await dependencies.characters.getById(c.req.param('characterId'));
+    if (!character) return c.json({ error: 'Character not found' }, 404);
+    return c.json(await dependencies.characterStates.listByCharacterId(character.id));
+  });
+
+  app.post('/characters/:characterId/states', async (c) => {
+    const character = await dependencies.characters.getById(c.req.param('characterId'));
+    if (!character) return c.json({ error: 'Character not found' }, 404);
+    const input = CreateCharacterStateRouteSchema.parse(await c.req.json());
+    const state = await dependencies.characterStates.create({ ...input, characterId: character.id });
+    return c.json(state, 201);
+  });
+
+  app.patch('/character-states/:stateId', async (c) => {
+    const input = UpdateCharacterStateRouteSchema.parse(await c.req.json());
+    const state = await dependencies.characterStates.update(c.req.param('stateId'), input);
+    return c.json(state);
+  });
+
+  app.delete('/character-states/:stateId', async (c) => {
+    await dependencies.characterStates.delete(c.req.param('stateId'));
     return c.body(null, 204);
   });
 
@@ -742,6 +909,38 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.body(null, 204);
   });
 
+  app.get('/chats/:chatId/scenes', async (c) => {
+    const chat = await dependencies.chats.getById(c.req.param('chatId'));
+    if (!chat) return c.json({ error: 'Chat not found' }, 404);
+    return c.json(await dependencies.scenes.listByChatId(chat.id));
+  });
+
+  app.post('/chats/:chatId/scenes', async (c) => {
+    const chat = await dependencies.chats.getById(c.req.param('chatId'));
+    if (!chat) return c.json({ error: 'Chat not found' }, 404);
+    const input = CreateSceneRouteSchema.parse(await c.req.json());
+    const scene = await dependencies.scenes.create({ ...input, chatId: chat.id });
+    return c.json(scene, 201);
+  });
+
+  app.patch('/scenes/:sceneId', async (c) => {
+    const input = UpdateSceneRouteSchema.parse(await c.req.json());
+    const scene = await dependencies.scenes.update(c.req.param('sceneId'), input);
+    return c.json(scene);
+  });
+
+  app.delete('/scenes/:sceneId', async (c) => {
+    await dependencies.scenes.delete(c.req.param('sceneId'));
+    return c.body(null, 204);
+  });
+
+  app.post('/scenes/:sceneId/activate', async (c) => {
+    const scene = await dependencies.scenes.getById(c.req.param('sceneId'));
+    if (!scene) return c.json({ error: 'Scene not found' }, 404);
+    const activated = await dependencies.scenes.setActiveScene(scene.chatId, scene.id);
+    return c.json(activated);
+  });
+
   app.post('/chats/:chatId/messages', async (c) => {
     try {
       const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
@@ -772,6 +971,61 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.json(await dependencies.messages.listByChatId(chat.id));
   });
 
+  app.get('/chats/:chatId/tree', async (c) => {
+    const chat = await dependencies.chats.getById(c.req.param('chatId'));
+    if (!chat) return c.json({ error: 'Chat not found' }, 404);
+    const allMessages = await dependencies.messages.listByChatId(chat.id);
+    return c.json(allMessages);
+  });
+
+  app.post('/messages/:messageId/fork', async (c) => {
+    const message = await dependencies.messages.getById(c.req.param('messageId'));
+    if (!message) return c.json({ error: 'Message not found' }, 404);
+
+    const allMessages = await dependencies.messages.listByChatId(message.chatId);
+    const chat = await dependencies.chats.getById(message.chatId);
+    if (!chat) return c.json({ error: 'Chat not found' }, 404);
+
+    const ancestorIds = new Set<string>();
+    let current: typeof message | undefined = message;
+    let iterations = 0;
+    const maxIterations = allMessages.length + 1;
+
+    while (current) {
+      ancestorIds.add(current.id);
+      if (!current.parentId) break;
+      current = allMessages.find((m) => m.id === current!.parentId);
+      iterations++;
+      if (iterations > maxIterations) {
+        return c.json({ error: 'Message ancestry contains a cycle' }, 500);
+      }
+    }
+
+    const forkedChat = await dependencies.chats.create({
+      title: `Fork of ${chat.title ?? 'Chat'}`,
+      authorNote: chat.authorNote,
+      authorNoteDepth: chat.authorNoteDepth,
+      characterId: chat.characterId,
+      presetId: chat.presetId,
+      providerConfigId: chat.providerConfigId,
+    });
+
+    const messageMap = new Map<string, string>();
+    const messagesToCopy = allMessages.filter((m) => ancestorIds.has(m.id)).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    for (const msg of messagesToCopy) {
+      const newMsg = await dependencies.messages.create({
+        chatId: forkedChat.id,
+        content: msg.content,
+        role: msg.role,
+        parentId: msg.parentId ? messageMap.get(msg.parentId) ?? null : null,
+      });
+      messageMap.set(msg.id, newMsg.id);
+    }
+
+    return c.json(forkedChat, 201);
+  });
+
   app.get('/chats/:chatId/prompt-preview', async (c) => {
     try {
       const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
@@ -783,6 +1037,9 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       }
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const characterStateList = character ? await dependencies.characterStates.listByCharacterId(character.id) : [];
+      const sceneList = await dependencies.scenes.listByChatId(chat.id);
+      const activeScene = sceneList.find((s) => s.isActive) ?? null;
       const settings = await dependencies.appSettings.get();
       const messages = await dependencies.messages.listByChatId(chat.id);
       const adapter = dependencies.createProviderAdapter(providerConfig);
@@ -790,12 +1047,14 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         authorNote: chat.authorNote,
         authorNoteDepth: chat.authorNoteDepth,
         character,
+        characterStates: characterStateList,
         chatId: chat.id,
         config,
         countTokens: adapter.countTokens.bind(adapter),
         messages,
         preset,
         provider: providerConfig,
+        scene: activeScene,
         settings,
       });
 
@@ -827,18 +1086,23 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       });
       const history = await dependencies.messages.listByChatId(chat.id);
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const characterStateList = character ? await dependencies.characterStates.listByCharacterId(character.id) : [];
+      const sceneList = await dependencies.scenes.listByChatId(chat.id);
+      const activeScene = sceneList.find((s) => s.isActive) ?? null;
       const settings = await dependencies.appSettings.get();
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         authorNoteDepth: chat.authorNoteDepth,
         character,
+        characterStates: characterStateList,
         chatId: chat.id,
         config,
         countTokens: adapter.countTokens.bind(adapter),
         messages: history,
         preset,
         provider: providerConfig,
+        scene: activeScene,
         settings,
       });
       const assistantMessage = await dependencies.messages.create({
@@ -852,7 +1116,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,
         dependencies,
-        chat.id,
+        chat,
         assistantMessage.id,
         adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
@@ -860,6 +1124,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         })),
         adapter,
         settings.personaName,
+        preset,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -883,18 +1148,23 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
 
       const history = await dependencies.messages.listByChatId(chat.id);
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const characterStateList = character ? await dependencies.characterStates.listByCharacterId(character.id) : [];
+      const sceneList = await dependencies.scenes.listByChatId(chat.id);
+      const activeScene = sceneList.find((s) => s.isActive) ?? null;
       const settings = await dependencies.appSettings.get();
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         authorNoteDepth: chat.authorNoteDepth,
         character,
+        characterStates: characterStateList,
         chatId: chat.id,
         config,
         countTokens: adapter.countTokens.bind(adapter),
         messages: history,
         preset,
         provider: providerConfig,
+        scene: activeScene,
         settings,
       });
       const assistantMessage = await dependencies.messages.create({
@@ -908,7 +1178,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,
         dependencies,
-        chat.id,
+        chat,
         assistantMessage.id,
         adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
@@ -916,6 +1186,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         })),
         adapter,
         settings.personaName,
+        preset,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -967,18 +1238,23 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       }
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const characterStateList = character ? await dependencies.characterStates.listByCharacterId(character.id) : [];
+      const sceneList = await dependencies.scenes.listByChatId(chat.id);
+      const activeScene = sceneList.find((s) => s.isActive) ?? null;
       const settings = await dependencies.appSettings.get();
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         authorNoteDepth: chat.authorNoteDepth,
         character,
+        characterStates: characterStateList,
         chatId: chat.id,
         config,
         countTokens: adapter.countTokens.bind(adapter),
         messages: history,
         preset,
         provider: providerConfig,
+        scene: activeScene,
         settings,
       });
       const assistantMessage = await dependencies.messages.create({
@@ -996,7 +1272,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,
         dependencies,
-        chat.id,
+        chat,
         assistantMessage.id,
         adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
@@ -1004,6 +1280,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         })),
         adapter,
         settings.personaName,
+        preset,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {
@@ -1034,12 +1311,16 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       }
 
       const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+      const characterStateList = character ? await dependencies.characterStates.listByCharacterId(character.id) : [];
+      const sceneList = await dependencies.scenes.listByChatId(chat.id);
+      const activeScene = sceneList.find((s) => s.isActive) ?? null;
       const settings = await dependencies.appSettings.get();
       const adapter = dependencies.createProviderAdapter(providerConfig);
       const promptPreview = await buildPromptPreview({
         authorNote: chat.authorNote,
         authorNoteDepth: chat.authorNoteDepth,
         character,
+        characterStates: characterStateList,
         chatId: chat.id,
         config,
         countTokens: adapter.countTokens.bind(adapter),
@@ -1053,8 +1334,10 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
             createdAt: new Date().toISOString(),
             id: 'continue_prompt',
             isActiveAttempt: true,
+            parentId: null,
             reasoningContent: '',
             role: 'user',
+            sceneId: null,
             state: 'completed',
             summaryOf: [],
             updatedAt: new Date().toISOString(),
@@ -1062,6 +1345,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         ],
         preset,
         provider: providerConfig,
+        scene: activeScene,
         settings,
       });
 
@@ -1070,7 +1354,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
       return streamSSE(c, async (stream) => forwardAssistantStream(
         stream,
         dependencies,
-        chat.id,
+        chat,
         lastMessage.id,
         adapter.streamGenerate(buildGenerationInput(promptPreview, preset, providerConfig, settings.personaName, {
           maxOutputTokens: request.maxOutputTokens,
@@ -1078,6 +1362,7 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
         })),
         adapter,
         settings.personaName,
+        preset,
       ));
     } catch (error) {
       if (error instanceof Error && error.message === 'Chat not found') {

@@ -28,12 +28,22 @@ export const ResponseErrorEventSchema = StreamEventBaseSchema.extend({
   error: z.string().min(1),
 });
 
+export const MetadataUpdatesEventSchema = StreamEventBaseSchema.extend({
+  type: z.literal('metadata.updates'),
+  stateUpdates: z.record(z.string()).optional(),
+  sceneUpdate: z.object({
+    description: z.string(),
+    title: z.string(),
+  }).optional(),
+});
+
 export const StreamEventSchema = z.discriminatedUnion('type', [
   ResponseStartedEventSchema,
   ReasoningDeltaEventSchema,
   ContentDeltaEventSchema,
   ResponseCompletedEventSchema,
   ResponseErrorEventSchema,
+  MetadataUpdatesEventSchema,
 ]);
 
 export type NormalizedStreamEvent = z.infer<typeof StreamEventSchema>;

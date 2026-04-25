@@ -58,6 +58,7 @@ export async function createAppDependencies(config: AppConfig): Promise<AppDepen
     repeatPenalty: config.defaultPresetRepeatPenalty,
     seed: config.defaultPresetSeed,
     stopStrings: config.defaultPresetStopStrings,
+    structuredMode: false,
     systemPrompt: config.defaultPresetSystemPrompt,
     temperature: config.defaultPresetTemperature,
     thinkingBudgetTokens: null,

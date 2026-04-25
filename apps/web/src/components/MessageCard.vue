@@ -104,6 +104,14 @@
       <button
         type="button"
         class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/60"
+        title="Fork conversation"
+        @click="$emit('fork', messageId)"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3L2 8l4 5"/><path d="M2 8h6c2 0 3 1 3 3v2"/></svg>
+      </button>
+      <button
+        type="button"
+        class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/60"
         title="Edit"
         @click="startEdit"
       >
@@ -217,6 +225,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   delete: [messageId: string];
   edit: [messageId: string, content: string];
+  fork: [messageId: string];
   retry: [messageId: string];
   selectAttempt: [messageId: string];
 }>();

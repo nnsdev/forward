@@ -19,6 +19,7 @@ export const PromptPreviewSchema = z.object({
     repeatPenalty: z.number(),
     seed: z.number().int().nullable(),
     stopStrings: z.array(z.string()),
+    structuredMode: z.boolean(),
     temperature: z.number(),
     thinkingBudgetTokens: z.number().int().nonnegative().nullable(),
     topK: z.number().int().nonnegative(),

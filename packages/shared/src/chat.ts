@@ -78,6 +78,7 @@ export const PresetSchema = z.object({
   contextLength: z.number().int().positive(),
   maxOutputTokens: z.number().int().positive(),
   stopStrings: z.array(z.string()),
+  structuredMode: z.boolean().default(false),
 });
 
 export const CreatePresetInputSchema = z.object({
@@ -96,6 +97,7 @@ export const CreatePresetInputSchema = z.object({
   contextLength: z.number().int().positive().default(131072),
   maxOutputTokens: z.number().int().positive(),
   stopStrings: z.array(z.string()),
+  structuredMode: z.boolean().default(false),
 });
 
 export const UpdatePresetInputSchema = z.object({
@@ -114,6 +116,7 @@ export const UpdatePresetInputSchema = z.object({
   contextLength: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   stopStrings: z.array(z.string()).optional(),
+  structuredMode: z.boolean().optional(),
 });
 
 export const MessageSchema = z.object({
@@ -122,7 +125,9 @@ export const MessageSchema = z.object({
   id: z.string().min(1),
   isActiveAttempt: z.boolean().default(true),
   chatId: z.string().min(1),
+  parentId: z.string().min(1).nullable().default(null),
   role: MessageRoleSchema,
+  sceneId: z.string().min(1).nullable().default(null),
   content: z.string(),
   reasoningContent: z.string().default(''),
   state: MessageStateSchema,
@@ -199,9 +204,60 @@ export type MessageState = z.infer<typeof MessageStateSchema>;
 export type Preset = z.infer<typeof PresetSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
+export const SceneSchema = z.object({
+  id: z.string().min(1),
+  chatId: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().default(''),
+  sortOrder: z.number().int().default(0),
+  isActive: z.boolean().default(false),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const CreateSceneInputSchema = z.object({
+  chatId: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().default(''),
+  sortOrder: z.number().int().default(0),
+});
+
+export const UpdateSceneInputSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  sortOrder: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const CharacterStateSchema = z.object({
+  id: z.string().min(1),
+  characterId: z.string().min(1),
+  key: z.string().min(1),
+  value: z.string().default(''),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export const CreateCharacterStateInputSchema = z.object({
+  characterId: z.string().min(1),
+  key: z.string().min(1),
+  value: z.string().default(''),
+});
+
+export const UpdateCharacterStateInputSchema = z.object({
+  key: z.string().min(1).optional(),
+  value: z.string().optional(),
+});
+
 export type UpdateCharacterInput = z.infer<typeof UpdateCharacterInputSchema>;
 export type UpdateChatInput = z.infer<typeof UpdateChatInputSchema>;
 export type UpdateMessageContentInput = z.infer<typeof UpdateMessageContentSchema>;
 export type UpdatePresetInput = z.infer<typeof UpdatePresetInputSchema>;
 export type UpdateProviderConfigInput = z.infer<typeof UpdateProviderConfigInputSchema>;
 export type RetryChatInput = z.infer<typeof RetryChatInputSchema>;
+export type Scene = z.infer<typeof SceneSchema>;
+export type CreateSceneInput = z.infer<typeof CreateSceneInputSchema>;
+export type UpdateSceneInput = z.infer<typeof UpdateSceneInputSchema>;
+export type CharacterState = z.infer<typeof CharacterStateSchema>;
+export type CreateCharacterStateInput = z.infer<typeof CreateCharacterStateInputSchema>;
+export type UpdateCharacterStateInput = z.infer<typeof UpdateCharacterStateInputSchema>;

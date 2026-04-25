@@ -76,6 +76,12 @@
         </button>
         <button
           class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
+          @click="scenePanelOpen = !scenePanelOpen"
+        >
+          Scenes
+        </button>
+        <button
+          class="w-full rounded-lg px-3 py-2 text-left text-sm text-white/35 transition hover:bg-white/[0.03] hover:text-white/65"
           @click="showPersonaEditor = true"
         >
           Persona
@@ -132,6 +138,17 @@
         </div>
 
         <div class="ml-auto flex items-center gap-1">
+          <div class="hidden items-center gap-0.5 rounded-lg border border-white/5 bg-white/[0.02] px-1 py-0.5 lg:flex">
+            <button
+              v-for="mode in ['chat', 'novel', 'script'] as const"
+              :key="mode"
+              class="rounded px-2 py-1 text-[10px] font-medium uppercase tracking-wider transition"
+              :class="chatStore.displayMode === mode ? 'bg-white/[0.06] text-white/70' : 'text-white/25 hover:text-white/50'"
+              @click="chatStore.setDisplayMode(mode)"
+            >
+              {{ mode }}
+            </button>
+          </div>
           <button
             class="rounded-lg px-3 py-1.5 text-[11px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/55"
             @click="characterPanelOpen = !characterPanelOpen"
@@ -182,7 +199,8 @@
         </div>
 
         <div v-else class="px-6 py-5 lg:px-10">
-          <div class="space-y-5">
+          <!-- Chat Mode -->
+          <div v-if="chatStore.displayMode === 'chat'" class="space-y-5">
             <MessageCard
               v-for="entry in displayMessages"
               :key="entry.message.id"
@@ -204,8 +222,52 @@
               @delete="handleDeleteMessage"
               @select-attempt="handleSelectAttempt"
               @edit="handleEditMessage"
+              @fork="handleFork"
             />
           </div>
+
+          <!-- Novel Mode -->
+          <div v-else-if="chatStore.displayMode === 'novel'" class="mx-auto max-w-2xl space-y-6">
+            <div
+              v-for="entry in displayMessages.filter((e) => !e.message.summaryOf.length)"
+              :key="entry.message.id"
+              class="rp-animate-enter"
+            >
+              <p v-if="entry.message.role === 'assistant'" class="text-[15px] leading-7 text-white/88">
+                <span class="font-medium text-[var(--rp-accent)]">{{ chatStore.activeCharacter?.name || 'Assistant' }}</span>
+                {{ ' ' }}
+                <span v-html="renderNovelSegment(entry.message.content)"></span>
+              </p>
+              <p v-else-if="entry.message.role === 'user'" class="text-[15px] leading-7 text-white/70 italic">
+                <span class="font-medium text-white/50 not-italic">{{ chatStore.appSettings?.personaName || 'You' }}</span>
+                {{ ' ' }}
+                <span v-html="renderNovelSegment(entry.message.content)"></span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Script Mode -->
+          <div v-else-if="chatStore.displayMode === 'script'" class="mx-auto max-w-2xl space-y-4">
+            <div
+              v-for="entry in displayMessages.filter((e) => !e.message.summaryOf.length)"
+              :key="entry.message.id"
+              class="rp-animate-enter"
+            >
+              <div v-if="entry.message.role === 'assistant'" class="space-y-1">
+                <p class="text-center text-sm font-medium uppercase tracking-wider text-[var(--rp-accent)]">
+                  {{ chatStore.activeCharacter?.name || 'Assistant' }}
+                </p>
+                <p class="mx-auto max-w-lg text-[15px] leading-7 text-white/88" v-html="renderMarkdown(entry.message.content)"></p>
+              </div>
+              <div v-else-if="entry.message.role === 'user'" class="space-y-1">
+                <p class="text-center text-sm font-medium uppercase tracking-wider text-white/50">
+                  {{ chatStore.appSettings?.personaName || 'You' }}
+                </p>
+                <p class="mx-auto max-w-lg text-[15px] leading-7 text-white/70" v-html="renderMarkdown(entry.message.content)"></p>
+              </div>
+            </div>
+          </div>
+
           <div v-if="chatStore.generating" class="mt-4 flex items-center gap-2 text-xs text-white/20">
             <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--rp-accent)]"></span>
             Writing...
@@ -364,9 +426,52 @@
                 </button>
               </div>
             </article>
+            <div v-if="chatStore.activeCharacter" class="mt-4 border-t border-white/5 pt-4">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/25">States</p>
+              <div class="mt-2 space-y-1.5">
+                <div
+                  v-for="state in chatStore.activeCharacterStates"
+                  :key="state.id"
+                  class="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2.5 py-1.5"
+                >
+                  <span class="text-[11px] font-medium text-white/50">{{ state.key }}</span>
+                  <input
+                    :value="state.value"
+                    class="min-w-0 flex-1 bg-transparent text-xs text-white/70 outline-none"
+                    @blur="updateCharacterStateValue(state.id, ($event.target as HTMLInputElement).value)"
+                    @keydown.enter="updateCharacterStateValue(state.id, ($event.target as HTMLInputElement).value)"
+                  />
+                  <button
+                    class="text-[10px] text-white/15 transition hover:text-rose-300/60"
+                    type="button"
+                    @click="removeCharacterState(state.id)"
+                  >
+                    &times;
+                  </button>
+                </div>
+                <form class="flex gap-1.5" @submit.prevent="addCharacterState">
+                  <input
+                    v-model="newStateKey"
+                    class="min-w-0 flex-1 rounded-lg border border-white/6 bg-white/[0.02] px-2 py-1 text-xs text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                    placeholder="Key"
+                  />
+                  <input
+                    v-model="newStateValue"
+                    class="min-w-0 flex-1 rounded-lg border border-white/6 bg-white/[0.02] px-2 py-1 text-xs text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+                    placeholder="Value"
+                  />
+                  <button
+                    class="rounded-lg bg-white/[0.04] px-2 py-1 text-xs text-white/40 transition hover:bg-white/[0.08] hover:text-white/70"
+                    type="submit"
+                  >
+                    +
+                  </button>
+                </form>
+              </div>
+            </div>
             <button
               v-if="chatStore.activeCharacter"
-              class="w-full rounded-lg px-3 py-2 text-xs text-white/25 transition hover:bg-white/[0.03] hover:text-white/50"
+              class="mt-4 w-full rounded-lg px-3 py-2 text-xs text-white/25 transition hover:bg-white/[0.03] hover:text-white/50"
               @click="attachCharacter(null)"
             >
               Remove character
@@ -495,6 +600,99 @@
       </div>
     </aside>
 
+    <aside
+      v-if="scenePanelOpen"
+      class="rp-animate-fade w-64 shrink-0 overflow-hidden border-l border-white/5 bg-[var(--rp-bg)] lg:w-72"
+    >
+      <div class="rp-scrollbar flex h-full flex-col overflow-y-auto">
+        <div class="flex h-12 items-center justify-between border-b border-white/5 px-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/25">Scenes</p>
+          <button class="text-white/25 hover:text-white/50" type="button" @click="scenePanelOpen = false">&times;</button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <button
+            class="w-full rounded-lg border border-white/8 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+            type="button"
+            @click="resetSceneForm(); showSceneEditor = true;"
+          >
+            New scene
+          </button>
+
+          <div class="space-y-1">
+            <div
+              v-for="scene in chatStore.activeScenes"
+              :key="scene.id"
+              class="rounded-lg px-3 py-2.5 text-left transition hover:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-white/75">{{ scene.title }}</p>
+                <div class="flex gap-1.5">
+                  <button
+                    class="rounded px-2 py-0.5 text-[11px] transition hover:text-white/60"
+                    :class="scene.isActive ? 'text-[var(--rp-accent)]' : 'text-white/30'"
+                    type="button"
+                    @click="activateScene(scene.id)"
+                  >
+                    {{ scene.isActive ? 'Active' : 'Use' }}
+                  </button>
+                  <button class="rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50" type="button" @click="editScene(scene.id)">
+                    Edit
+                  </button>
+                  <button class="rounded px-2 py-0.5 text-[11px] text-rose-300/40 transition hover:text-rose-300/80" type="button" @click="removeScene(scene.id)">
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p v-if="scene.description" class="mt-0.5 text-xs text-white/25">{{ scene.description }}</p>
+            </div>
+            <div v-if="!chatStore.activeScenes.length" class="px-3 py-4 text-center text-xs text-white/20">
+              No scenes yet
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div v-if="showSceneEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showSceneEditor = false">
+      <div class="w-[28rem] max-h-[85vh] overflow-y-auto rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
+        <p class="text-sm font-medium text-white/85">{{ editingSceneId ? 'Edit scene' : 'New scene' }}</p>
+        <form class="mt-4 space-y-3" @submit.prevent="saveScene">
+          <input
+            v-model="sceneForm.title"
+            class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Scene title"
+          />
+          <textarea
+            v-model="sceneForm.description"
+            class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Scene description / setting"
+          />
+          <input
+            v-model.number="sceneForm.sortOrder"
+            class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Order"
+            type="number"
+          />
+          <div class="flex gap-2">
+            <button
+              class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
+              type="button"
+              @click="showSceneEditor = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="flex-1 rounded-lg bg-[var(--rp-accent)] px-3 py-2 text-sm font-medium text-[#0a1212] transition hover:brightness-110"
+              type="submit"
+            >
+              {{ editingSceneId ? 'Save' : 'Create' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div v-if="showPresetEditor" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showPresetEditor = false">
       <div class="w-[32rem] max-h-[85vh] overflow-y-auto rounded-xl border border-white/10 bg-[var(--rp-bg)] p-6">
         <p class="text-sm font-medium text-white/85">{{ editingPresetId ? 'Edit preset' : 'New preset' }}</p>
@@ -531,6 +729,10 @@
               placeholder="Optional system prompt override"
             />
           </div>
+          <label class="flex items-center gap-2 text-sm text-white/50">
+            <input v-model="presetForm.structuredMode" type="checkbox" class="accent-[var(--rp-accent)]" />
+            Structured mode (JSON responses with state/scene updates)
+          </label>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="mb-1 block text-[10px] uppercase tracking-wider text-white/25">Temperature</label>
@@ -884,9 +1086,14 @@ import { useRouter } from 'vue-router';
 
 import { getApiBaseUrl } from '../lib/config';
 import { api } from '../lib/api';
+import { renderMarkdown } from '../lib/markdown';
 import MessageCard from '../components/MessageCard.vue';
 import { useChatStore } from '../stores/chat';
 import { useSessionStore } from '../stores/session';
+
+function renderNovelSegment(content: string): string {
+  return renderMarkdown(content).replace(/<p>/g, '<span class="novel-segment">').replace(/<\/p>/g, '</span>');
+}
 
 const chatStore = useChatStore();
 const authorNoteDraft = ref('');
@@ -911,9 +1118,15 @@ const showCharacterEditor = ref(false);
 const showPersonaEditor = ref(false);
 const showPresetEditor = ref(false);
 const showPasswordChange = ref(false);
+const scenePanelOpen = ref(false);
+const showSceneEditor = ref(false);
+const editingSceneId = ref<string | null>(null);
+const sceneForm = reactive({ title: '', description: '', sortOrder: 0 });
 const passwordError = ref('');
 const passwordForm = reactive({ current: '', next: '' });
 const personaForm = reactive({ description: '', name: 'User' });
+const newStateKey = ref('');
+const newStateValue = ref('');
 const characterForm = reactive<CreateCharacterInput>({
   avatarAssetPath: null,
   description: '',
@@ -934,6 +1147,7 @@ const presetForm = reactive<CreatePresetInput>({
   repeatPenalty: 1,
   seed: null,
   stopStrings: [],
+  structuredMode: false,
   systemPrompt: '',
   temperature: 0.7,
   thinkingBudgetTokens: null,
@@ -1082,6 +1296,11 @@ watch(() => {
 watch(() => chatStore.activeChatId, async (newId) => {
   if (newId) {
     await chatStore.loadMessages(newId);
+    await chatStore.loadScenes(newId);
+    const characterId = chatStore.activeChat?.characterId;
+    if (characterId) {
+      await chatStore.loadCharacterStates(characterId);
+    }
     scrollToBottom();
   }
   firstMessageSent = false;
@@ -1226,6 +1445,7 @@ function resetPresetForm() {
   presetForm.contextLength = 131072;
   presetForm.thinkingBudgetTokens = null;
   presetForm.stopStrings = [];
+  presetForm.structuredMode = false;
   showPresetEditor.value = false;
 }
 
@@ -1257,6 +1477,7 @@ function editPreset(presetId: string) {
   presetForm.systemPrompt = preset.systemPrompt;
   presetForm.instructTemplate = preset.instructTemplate ? cloneTemplate(preset.instructTemplate) : null;
   selectedTemplateName.value = preset.instructTemplate?.name ?? 'Chat messages';
+  presetForm.structuredMode = preset.structuredMode;
   presetForm.temperature = preset.temperature;
   presetForm.maxOutputTokens = preset.maxOutputTokens;
   presetForm.topP = preset.topP;
@@ -1417,6 +1638,10 @@ async function handleSelectAttempt(messageId: string) {
   await chatStore.selectMessageAttempt(messageId);
 }
 
+async function handleFork(messageId: string) {
+  await chatStore.forkAtMessage(messageId);
+}
+
 async function changePassword() {
   if (!passwordForm.current || !passwordForm.next) {
     passwordError.value = 'Both fields are required';
@@ -1432,5 +1657,60 @@ async function changePassword() {
   } catch (error) {
     passwordError.value = error instanceof Error ? error.message : 'Failed to change password';
   }
+}
+
+function resetSceneForm() {
+  editingSceneId.value = null;
+  sceneForm.title = '';
+  sceneForm.description = '';
+  sceneForm.sortOrder = 0;
+}
+
+function editScene(sceneId: string) {
+  const scene = chatStore.activeScenes.find((s) => s.id === sceneId);
+  if (!scene) return;
+  editingSceneId.value = scene.id;
+  showSceneEditor.value = true;
+  sceneForm.title = scene.title;
+  sceneForm.description = scene.description;
+  sceneForm.sortOrder = scene.sortOrder;
+}
+
+async function saveScene() {
+  if (!sceneForm.title.trim()) return;
+  const chat = chatStore.activeChat;
+  if (!chat) return;
+  const sortOrder = Number.isNaN(Number(sceneForm.sortOrder)) ? 0 : Number(sceneForm.sortOrder);
+  const payload = { title: sceneForm.title.trim(), description: sceneForm.description, sortOrder };
+  if (editingSceneId.value) {
+    await chatStore.updateScene(editingSceneId.value, payload);
+  } else {
+    await chatStore.createScene({ ...payload, chatId: chat.id });
+  }
+  resetSceneForm();
+}
+
+async function removeScene(sceneId: string) {
+  await chatStore.deleteScene(sceneId);
+}
+
+async function activateScene(sceneId: string) {
+  await chatStore.activateScene(sceneId);
+}
+
+async function addCharacterState() {
+  const characterId = chatStore.activeCharacter?.id;
+  if (!characterId || !newStateKey.value.trim()) return;
+  await chatStore.createCharacterState(characterId, newStateKey.value.trim(), newStateValue.value.trim());
+  newStateKey.value = '';
+  newStateValue.value = '';
+}
+
+async function updateCharacterStateValue(stateId: string, value: string) {
+  await chatStore.updateCharacterState(stateId, { value });
+}
+
+async function removeCharacterState(stateId: string) {
+  await chatStore.deleteCharacterState(stateId);
 }
 </script>

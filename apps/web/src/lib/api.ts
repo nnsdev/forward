@@ -1,12 +1,15 @@
 import type {
   AppSettings,
   Character,
+  CharacterState,
   Chat,
   CreateCharacterInput,
+  CreateCharacterStateInput,
   CreateChatInput,
   CreatePresetInput,
   CreateProviderConfigInput,
   CreateMessageInput,
+  CreateSceneInput,
   Message,
   NormalizedStreamEvent,
   Preset,
@@ -15,13 +18,16 @@ import type {
   ProviderListResponse,
   ProviderModelsResponse,
   RetryChatInput,
+  Scene,
   SessionResponse,
   UpdateCharacterInput,
+  UpdateCharacterStateInput,
   UpdateChatInput,
   UpdateAppSettingsInput,
   UpdateMessageContentInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
+  UpdateSceneInput,
 } from '@forward/shared';
 
 import { getApiBaseUrl } from './config';
@@ -313,5 +319,52 @@ export const api = {
       body: JSON.stringify(input),
       method: 'PATCH',
     });
+  },
+  async listScenes(chatId: string): Promise<Scene[]> {
+    return expectJson<Scene[]>(`/chats/${chatId}/scenes`);
+  },
+  async createScene(chatId: string, input: CreateSceneInput): Promise<Scene> {
+    return expectJson<Scene>(`/chats/${chatId}/scenes`, {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
+  async updateScene(sceneId: string, input: UpdateSceneInput): Promise<Scene> {
+    return expectJson<Scene>(`/scenes/${sceneId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+  async deleteScene(sceneId: string): Promise<void> {
+    const response = await request(`/scenes/${sceneId}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`failed to delete scene ${sceneId}`);
+  },
+  async activateScene(sceneId: string): Promise<Scene> {
+    return expectJson<Scene>(`/scenes/${sceneId}/activate`, { method: 'POST' });
+  },
+  async listCharacterStates(characterId: string): Promise<CharacterState[]> {
+    return expectJson<CharacterState[]>(`/characters/${characterId}/states`);
+  },
+  async createCharacterState(characterId: string, input: CreateCharacterStateInput): Promise<CharacterState> {
+    return expectJson<CharacterState>(`/characters/${characterId}/states`, {
+      body: JSON.stringify(input),
+      method: 'POST',
+    });
+  },
+  async updateCharacterState(stateId: string, input: UpdateCharacterStateInput): Promise<CharacterState> {
+    return expectJson<CharacterState>(`/character-states/${stateId}`, {
+      body: JSON.stringify(input),
+      method: 'PATCH',
+    });
+  },
+  async deleteCharacterState(stateId: string): Promise<void> {
+    const response = await request(`/character-states/${stateId}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`failed to delete character state ${stateId}`);
+  },
+  async forkAtMessage(messageId: string): Promise<Chat> {
+    return expectJson<Chat>(`/messages/${messageId}/fork`, { method: 'POST' });
+  },
+  async getMessageTree(chatId: string): Promise<Message[]> {
+    return expectJson<Message[]>(`/chats/${chatId}/tree`);
   },
 };

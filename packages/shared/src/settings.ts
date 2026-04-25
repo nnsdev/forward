@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const DisplayModeSchema = z.enum(['chat', 'novel', 'script']);
+
 export const AppSettingsSchema = z.object({
   id: z.string().min(1),
   defaultPresetId: z.string().min(1).nullable(),
@@ -8,6 +10,7 @@ export const AppSettingsSchema = z.object({
   personaDescription: z.string(),
   personaName: z.string(),
   showReasoningByDefault: z.boolean(),
+  displayMode: DisplayModeSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -20,6 +23,7 @@ export const UpdateAppSettingsInputSchema = z
     personaDescription: z.string().optional(),
     personaName: z.string().optional(),
     showReasoningByDefault: z.boolean().optional(),
+    displayMode: DisplayModeSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'At least one field must be updated');
 

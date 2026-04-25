@@ -33,6 +33,7 @@ async function createTestApp() {
     repeatPenalty: 1,
     seed: null,
     stopStrings: [],
+    structuredMode: false,
     systemPrompt: '',
     temperature: 0.7,
     thinkingBudgetTokens: null,

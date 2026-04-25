@@ -3,6 +3,7 @@ import { desc, eq } from 'drizzle-orm';
 import type {
   AppSettings,
   Character,
+  CharacterState,
   Chat,
   CreateCharacterInput,
   CreateChatInput,
@@ -13,16 +14,21 @@ import type {
   MessageState,
   Preset,
   ProviderConfig,
+  Scene,
   UpdateCharacterInput,
   UpdateChatInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
   UpdateAppSettingsInput,
+  CreateSceneInput,
+  UpdateSceneInput,
+  CreateCharacterStateInput,
+  UpdateCharacterStateInput,
 } from '@forward/shared';
-import { AppSettingsSchema, CharacterSchema, ChatSchema, MessageSchema, PresetSchema, ProviderConfigSchema } from '@forward/shared';
+import { AppSettingsSchema, CharacterSchema, CharacterStateSchema, ChatSchema, MessageSchema, PresetSchema, ProviderConfigSchema, SceneSchema } from '@forward/shared';
 
 import type { SqliteDatabaseClient } from './client';
-import { appSettings, characters, chats, messages, presets, providerConfigs } from './schema';
+import { appSettings, characterStates, characters, chats, messages, presets, providerConfigs, scenes } from './schema';
 
 export interface ProviderConfigRepository {
   create(input: CreateProviderConfigInput): Promise<ProviderConfig>;
@@ -64,8 +70,10 @@ export interface CreateMessageInput {
   chatId: string;
   content: string;
   isActiveAttempt?: boolean;
+  parentId?: string | null;
   reasoningContent?: string;
   role: MessageRole;
+  sceneId?: string | null;
   state?: MessageState;
   summaryOf?: string[];
 }
@@ -82,13 +90,32 @@ export interface MessageRepository {
   updateState(id: string, state: MessageState): Promise<Message>;
 }
 
+export interface SceneRepository {
+  create(input: CreateSceneInput): Promise<Scene>;
+  delete(id: string): Promise<void>;
+  getById(id: string): Promise<Scene | null>;
+  listByChatId(chatId: string): Promise<Scene[]>;
+  update(id: string, input: UpdateSceneInput): Promise<Scene>;
+  setActiveScene(chatId: string, sceneId: string): Promise<Scene>;
+}
+
+export interface CharacterStateRepository {
+  create(input: CreateCharacterStateInput): Promise<CharacterState>;
+  delete(id: string): Promise<void>;
+  getById(id: string): Promise<CharacterState | null>;
+  listByCharacterId(characterId: string): Promise<CharacterState[]>;
+  update(id: string, input: UpdateCharacterStateInput): Promise<CharacterState>;
+}
+
 export interface AppRepositories {
   appSettings: AppSettingsRepository;
+  characterStates: CharacterStateRepository;
   characters: CharacterRepository;
   chats: ChatRepository;
   messages: MessageRepository;
   presets: PresetRepository;
   providerConfigs: ProviderConfigRepository;
+  scenes: SceneRepository;
 }
 
 export interface AppSettingsRepository {
@@ -138,6 +165,7 @@ function mapPreset(row: typeof presets.$inferSelect): Preset {
     repeatPenalty: row.repeatPenalty,
     seed: row.seed ?? null,
     stopStrings: JSON.parse(row.stopStringsJson) as string[],
+    structuredMode: row.structuredMode,
     systemPrompt: row.systemPrompt,
     thinkingBudgetTokens: row.thinkingBudgetTokens ?? null,
     temperature: row.temperature,
@@ -169,8 +197,10 @@ function mapMessage(row: typeof messages.$inferSelect): Message {
     createdAt: row.createdAt,
     id: row.id,
     isActiveAttempt: row.isActiveAttempt,
+    parentId: row.parentId ?? null,
     reasoningContent: row.reasoningContent,
     role: row.role,
+    sceneId: row.sceneId ?? null,
     state: row.state,
     summaryOf: row.summaryOf ? JSON.parse(row.summaryOf) as string[] : [],
     updatedAt: row.updatedAt,
@@ -182,12 +212,37 @@ function mapAppSettings(row: typeof appSettings.$inferSelect): AppSettings {
     createdAt: row.createdAt,
     defaultPresetId: row.defaultPresetId ?? null,
     defaultProviderConfigId: row.defaultProviderConfigId ?? null,
+    displayMode: row.displayMode as AppSettings['displayMode'],
     id: row.id,
     personaAvatarAssetPath: row.personaAvatarAssetPath ?? null,
     personaDescription: row.personaDescription,
     personaName: row.personaName,
     showReasoningByDefault: row.showReasoningByDefault,
     updatedAt: row.updatedAt,
+  });
+}
+
+function mapScene(row: typeof scenes.$inferSelect): Scene {
+  return SceneSchema.parse({
+    chatId: row.chatId,
+    createdAt: row.createdAt,
+    description: row.description,
+    id: row.id,
+    isActive: row.isActive,
+    sortOrder: row.sortOrder,
+    title: row.title,
+    updatedAt: row.updatedAt,
+  });
+}
+
+function mapCharacterState(row: typeof characterStates.$inferSelect): CharacterState {
+  return CharacterStateSchema.parse({
+    characterId: row.characterId,
+    createdAt: row.createdAt,
+    id: row.id,
+    key: row.key,
+    updatedAt: row.updatedAt,
+    value: row.value,
   });
 }
 
@@ -207,6 +262,7 @@ export function createAppSettingsRepository(client: SqliteDatabaseClient): AppSe
       createdAt: timestamp,
       defaultPresetId: null,
       defaultProviderConfigId: null,
+      displayMode: 'chat',
       id: SETTINGS_ID,
       personaAvatarAssetPath: null,
       personaDescription: '',
@@ -229,6 +285,7 @@ export function createAppSettingsRepository(client: SqliteDatabaseClient): AppSe
       client.db.update(appSettings).set({
         defaultPresetId: input.defaultPresetId === undefined ? existing.defaultPresetId : input.defaultPresetId,
         defaultProviderConfigId: input.defaultProviderConfigId === undefined ? existing.defaultProviderConfigId : input.defaultProviderConfigId,
+        displayMode: input.displayMode === undefined ? existing.displayMode : input.displayMode,
         personaAvatarAssetPath: input.personaAvatarAssetPath === undefined ? existing.personaAvatarAssetPath : input.personaAvatarAssetPath,
         personaDescription: input.personaDescription ?? existing.personaDescription,
         personaName: input.personaName ?? existing.personaName,
@@ -442,6 +499,7 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
           repeatPenalty: input.repeatPenalty,
           seed: input.seed ?? null,
           stopStringsJson: JSON.stringify(input.stopStrings),
+          structuredMode: input.structuredMode,
           systemPrompt: input.systemPrompt,
           thinkingBudgetTokens: input.thinkingBudgetTokens ?? null,
           temperature: input.temperature,
@@ -482,6 +540,7 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
             repeatPenalty: input.repeatPenalty,
             seed: input.seed ?? null,
             stopStringsJson: JSON.stringify(input.stopStrings),
+            structuredMode: input.structuredMode,
             systemPrompt: input.systemPrompt,
             thinkingBudgetTokens: input.thinkingBudgetTokens ?? null,
             temperature: input.temperature,
@@ -507,6 +566,7 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
             repeatPenalty: input.repeatPenalty,
             seed: input.seed ?? null,
             stopStringsJson: JSON.stringify(input.stopStrings),
+            structuredMode: input.structuredMode,
             systemPrompt: input.systemPrompt,
             thinkingBudgetTokens: input.thinkingBudgetTokens ?? null,
             temperature: input.temperature,
@@ -543,6 +603,7 @@ export function createPresetRepository(client: SqliteDatabaseClient): PresetRepo
           repeatPenalty: input.repeatPenalty ?? existing.repeatPenalty,
           seed: input.seed === undefined ? existing.seed : (input.seed ?? null),
           stopStringsJson: JSON.stringify(input.stopStrings ?? JSON.parse(existing.stopStringsJson)),
+          structuredMode: input.structuredMode === undefined ? existing.structuredMode : input.structuredMode,
           systemPrompt: input.systemPrompt ?? existing.systemPrompt,
           thinkingBudgetTokens: input.thinkingBudgetTokens === undefined ? existing.thinkingBudgetTokens : (input.thinkingBudgetTokens ?? null),
           temperature: input.temperature ?? existing.temperature,
@@ -695,8 +756,10 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
           createdAt: timestamp,
           id,
           isActiveAttempt,
+          parentId: input.parentId ?? null,
           reasoningContent: input.reasoningContent ?? '',
           role: input.role,
+          sceneId: input.sceneId ?? null,
           state: input.state ?? 'completed',
           summaryOf: input.summaryOf ? JSON.stringify(input.summaryOf) : '',
           tokenEstimate: null,
@@ -797,14 +860,133 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
   };
 }
 
+export function createSceneRepository(client: SqliteDatabaseClient): SceneRepository {
+  return {
+    async create(input) {
+      const id = crypto.randomUUID();
+      const timestamp = nowIso();
+
+      client.db
+        .insert(scenes)
+        .values({
+          chatId: input.chatId,
+          createdAt: timestamp,
+          description: input.description ?? '',
+          id,
+          isActive: false,
+          sortOrder: input.sortOrder ?? 0,
+          title: input.title,
+          updatedAt: timestamp,
+        })
+        .run();
+
+      return mapScene(client.db.select().from(scenes).where(eq(scenes.id, id)).get()!);
+    },
+    async delete(id) {
+      client.db.delete(scenes).where(eq(scenes.id, id)).run();
+    },
+    async getById(id) {
+      const row = client.db.select().from(scenes).where(eq(scenes.id, id)).get();
+      return row ? mapScene(row) : null;
+    },
+    async listByChatId(chatId) {
+      return client.db.select().from(scenes).where(eq(scenes.chatId, chatId)).orderBy(scenes.sortOrder).all().map(mapScene);
+    },
+    async update(id, input) {
+      const existing = client.db.select().from(scenes).where(eq(scenes.id, id)).get();
+      if (!existing) throw new Error(`scene ${id} was not found`);
+      const timestamp = nowIso();
+
+      client.db
+        .update(scenes)
+        .set({
+          description: input.description === undefined ? existing.description : input.description,
+          isActive: input.isActive === undefined ? existing.isActive : input.isActive,
+          sortOrder: input.sortOrder === undefined ? existing.sortOrder : input.sortOrder,
+          title: input.title ?? existing.title,
+          updatedAt: timestamp,
+        })
+        .where(eq(scenes.id, id))
+        .run();
+
+      return mapScene(client.db.select().from(scenes).where(eq(scenes.id, id)).get()!);
+    },
+    async setActiveScene(chatId, sceneId) {
+      const timestamp = nowIso();
+      client.sqlite.exec('BEGIN');
+      try {
+        client.db.update(scenes).set({ isActive: false, updatedAt: timestamp }).where(eq(scenes.chatId, chatId)).run();
+        client.db.update(scenes).set({ isActive: true, updatedAt: timestamp }).where(eq(scenes.id, sceneId)).run();
+        client.sqlite.exec('COMMIT');
+      } catch {
+        client.sqlite.exec('ROLLBACK');
+        throw new Error('Failed to activate scene');
+      }
+      return mapScene(client.db.select().from(scenes).where(eq(scenes.id, sceneId)).get()!);
+    },
+  };
+}
+
+export function createCharacterStateRepository(client: SqliteDatabaseClient): CharacterStateRepository {
+  return {
+    async create(input) {
+      const id = crypto.randomUUID();
+      const timestamp = nowIso();
+
+      client.db
+        .insert(characterStates)
+        .values({
+          characterId: input.characterId,
+          createdAt: timestamp,
+          id,
+          key: input.key,
+          updatedAt: timestamp,
+          value: input.value ?? '',
+        })
+        .run();
+
+      return mapCharacterState(client.db.select().from(characterStates).where(eq(characterStates.id, id)).get()!);
+    },
+    async delete(id) {
+      client.db.delete(characterStates).where(eq(characterStates.id, id)).run();
+    },
+    async getById(id) {
+      const row = client.db.select().from(characterStates).where(eq(characterStates.id, id)).get();
+      return row ? mapCharacterState(row) : null;
+    },
+    async listByCharacterId(characterId) {
+      return client.db.select().from(characterStates).where(eq(characterStates.characterId, characterId)).orderBy(characterStates.key).all().map(mapCharacterState);
+    },
+    async update(id, input) {
+      const existing = client.db.select().from(characterStates).where(eq(characterStates.id, id)).get();
+      if (!existing) throw new Error(`character state ${id} was not found`);
+      const timestamp = nowIso();
+
+      client.db
+        .update(characterStates)
+        .set({
+          key: input.key ?? existing.key,
+          updatedAt: timestamp,
+          value: input.value === undefined ? existing.value : input.value,
+        })
+        .where(eq(characterStates.id, id))
+        .run();
+
+      return mapCharacterState(client.db.select().from(characterStates).where(eq(characterStates.id, id)).get()!);
+    },
+  };
+}
+
 export function createRepositories(client: SqliteDatabaseClient): AppRepositories {
   return {
     appSettings: createAppSettingsRepository(client),
+    characterStates: createCharacterStateRepository(client),
     characters: createCharacterRepository(client),
     chats: createChatRepository(client),
     messages: createMessageRepository(client),
     presets: createPresetRepository(client),
     providerConfigs: createProviderConfigRepository(client),
+    scenes: createSceneRepository(client),
   };
 }
 

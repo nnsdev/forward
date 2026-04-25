@@ -46,6 +46,7 @@ export const mockPromptPreview: PromptPreview = {
     repeatPenalty: 1,
     seed: null,
     stopStrings: [],
+    structuredMode: false,
     temperature: 0.7,
     thinkingBudgetTokens: null,
     topK: 40,

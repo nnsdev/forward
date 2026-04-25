@@ -33,6 +33,7 @@ export const presets = sqliteTable('presets', {
   contextLength: integer('context_length').notNull().default(131072).$type<number>(),
   maxOutputTokens: integer('max_output_tokens').notNull(),
   stopStringsJson: text('stop_strings_json').notNull(),
+  structuredMode: integer('structured_mode', { mode: 'boolean' }).notNull().default(false),
   ...timestamps,
 });
 
@@ -62,6 +63,7 @@ export const chats = sqliteTable('chats', {
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),
   chatId: text('chat_id').notNull(),
+  parentId: text('parent_id'),
   attemptGroupId: text('attempt_group_id'),
   attemptIndex: integer('attempt_index').notNull().default(0),
   isActiveAttempt: integer('is_active_attempt', { mode: 'boolean' }).notNull().default(true),
@@ -71,6 +73,25 @@ export const messages = sqliteTable('messages', {
   state: text('state').notNull(),
   summaryOf: text('summary_of').notNull().default(''),
   tokenEstimate: integer('token_estimate'),
+  sceneId: text('scene_id'),
+  ...timestamps,
+});
+
+export const scenes = sqliteTable('scenes', {
+  id: text('id').primaryKey(),
+  chatId: text('chat_id').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  sortOrder: integer('sort_order').notNull().default(0),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
+  ...timestamps,
+});
+
+export const characterStates = sqliteTable('character_states', {
+  id: text('id').primaryKey(),
+  characterId: text('character_id').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull().default(''),
   ...timestamps,
 });
 
@@ -82,6 +103,7 @@ export const appSettings = sqliteTable('app_settings', {
   personaDescription: text('persona_description').notNull().default(''),
   personaName: text('persona_name').notNull().default('User'),
   showReasoningByDefault: integer('show_reasoning_by_default', { mode: 'boolean' }).notNull().default(false),
+  displayMode: text('display_mode').notNull().default('chat'),
   ...timestamps,
 });
 
@@ -97,10 +119,12 @@ export const sessions = sqliteTable('sessions', {
 
 export const schema = {
   appSettings,
+  characterStates,
   characters,
   chats,
   messages,
   presets,
   providerConfigs,
+  scenes,
   sessions,
 };

@@ -1,18 +1,23 @@
 import type {
   AppSettings,
   Character,
+  CharacterState,
   Chat,
   CreateCharacterInput,
   CreatePresetInput,
   CreateProviderConfigInput,
+  CreateSceneInput,
   Message,
   NormalizedStreamEvent,
   Preset,
   ProviderConfig,
+  Scene,
   UpdateCharacterInput,
   UpdateAppSettingsInput,
   UpdatePresetInput,
   UpdateProviderConfigInput,
+  UpdateSceneInput,
+  UpdateCharacterStateInput,
 } from '@forward/shared';
 import { defineStore } from 'pinia';
 
@@ -26,6 +31,7 @@ export const useChatStore = defineStore('chat', {
   state: () => ({
     activeChatId: null as string | null,
     appSettings: null as AppSettings | null,
+    characterStates: {} as Record<string, CharacterState[]>,
     characters: [] as Character[],
     chats: [] as Chat[],
     error: '' as string,
@@ -35,6 +41,7 @@ export const useChatStore = defineStore('chat', {
     messagesByChatId: {} as Record<string, Message[]>,
     presets: [] as Preset[],
     providers: [] as ProviderConfig[],
+    scenesByChatId: {} as Record<string, Scene[]>,
   }),
   getters: {
     activeChat(state): Chat | null {
@@ -67,6 +74,18 @@ export const useChatStore = defineStore('chat', {
     },
     defaultProvider(state): ProviderConfig | null {
       return state.providers[0] ?? null;
+    },
+    activeScenes(state): Scene[] {
+      if (!state.activeChatId) return [];
+      return state.scenesByChatId[state.activeChatId] ?? [];
+    },
+    activeCharacterStates(state): CharacterState[] {
+      const activeChat = state.chats.find((chat) => chat.id === state.activeChatId);
+      if (!activeChat?.characterId) return [];
+      return state.characterStates[activeChat.characterId] ?? [];
+    },
+    displayMode(state): 'chat' | 'novel' | 'script' {
+      return state.appSettings?.displayMode ?? 'chat';
     },
   },
   actions: {
@@ -104,8 +123,10 @@ export const useChatStore = defineStore('chat', {
           createdAt: new Date().toISOString(),
           id: event.messageId,
           isActiveAttempt: true,
+          parentId: null,
           reasoningContent: '',
           role: 'assistant',
+          sceneId: null,
           state: 'streaming',
           summaryOf: [],
           updatedAt: new Date().toISOString(),
@@ -143,6 +164,14 @@ export const useChatStore = defineStore('chat', {
           updatedAt: new Date().toISOString(),
         };
         this.error = event.error ?? 'Generation failed';
+      }
+
+      if (event.type === 'metadata.updates') {
+        const activeChat = this.chats.find((c) => c.id === chatId);
+        if (activeChat?.characterId) {
+          this.loadCharacterStates(activeChat.characterId).catch(() => {});
+        }
+        this.loadScenes(chatId).catch(() => {});
       }
 
       this.messagesByChatId[chatId] = currentMessages;
@@ -334,8 +363,10 @@ export const useChatStore = defineStore('chat', {
         createdAt: new Date().toISOString(),
         id: makeTempId('temp-user'),
         isActiveAttempt: true,
+        parentId: null,
         reasoningContent: '',
         role: 'user',
+        sceneId: null,
         state: 'pending',
         summaryOf: [],
         updatedAt: new Date().toISOString(),
@@ -636,6 +667,67 @@ export const useChatStore = defineStore('chat', {
       const updatedChat = await api.updateChat(this.activeChat.id, { authorNoteDepth });
 
       this.chats = this.chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat));
+    },
+    async loadScenes(chatId: string) {
+      this.scenesByChatId[chatId] = await api.listScenes(chatId);
+    },
+    async createScene(input: CreateSceneInput) {
+      const scene = await api.createScene(input.chatId, input);
+      const existing = this.scenesByChatId[input.chatId] ?? [];
+      this.scenesByChatId[input.chatId] = [...existing, scene].sort((a, b) => a.sortOrder - b.sortOrder);
+      return scene;
+    },
+    async updateScene(sceneId: string, input: UpdateSceneInput) {
+      const scene = await api.updateScene(sceneId, input);
+      const list = this.scenesByChatId[scene.chatId] ?? [];
+      this.scenesByChatId[scene.chatId] = list.map((s) => (s.id === scene.id ? scene : s));
+      return scene;
+    },
+    async deleteScene(sceneId: string) {
+      const list = this.activeScenes;
+      const scene = list.find((s) => s.id === sceneId);
+      if (!scene) return;
+      await api.deleteScene(sceneId);
+      this.scenesByChatId[scene.chatId] = list.filter((s) => s.id !== sceneId);
+    },
+    async activateScene(sceneId: string) {
+      const scene = await api.activateScene(sceneId);
+      const list = this.scenesByChatId[scene.chatId] ?? [];
+      this.scenesByChatId[scene.chatId] = list.map((s) => ({ ...s, isActive: s.id === sceneId }));
+    },
+    async loadCharacterStates(characterId: string) {
+      this.characterStates[characterId] = await api.listCharacterStates(characterId);
+    },
+    async createCharacterState(characterId: string, key: string, value: string) {
+      const state = await api.createCharacterState(characterId, { characterId, key, value });
+      const existing = this.characterStates[characterId] ?? [];
+      this.characterStates[characterId] = [...existing, state].sort((a, b) => a.key.localeCompare(b.key));
+      return state;
+    },
+    async updateCharacterState(stateId: string, input: UpdateCharacterStateInput) {
+      const state = await api.updateCharacterState(stateId, input);
+      const list = this.characterStates[state.characterId] ?? [];
+      this.characterStates[state.characterId] = list.map((s) => (s.id === state.id ? state : s));
+      return state;
+    },
+    async deleteCharacterState(stateId: string) {
+      for (const [characterId, states] of Object.entries(this.characterStates)) {
+        if (states.some((s) => s.id === stateId)) {
+          await api.deleteCharacterState(stateId);
+          this.characterStates[characterId] = states.filter((s) => s.id !== stateId);
+          break;
+        }
+      }
+    },
+    async setDisplayMode(mode: 'chat' | 'novel' | 'script') {
+      this.appSettings = await api.updateSettings({ displayMode: mode });
+    },
+    async forkAtMessage(messageId: string) {
+      const chat = await api.forkAtMessage(messageId);
+      this.chats = [chat, ...this.chats];
+      this.activeChatId = chat.id;
+      await this.loadMessages(chat.id);
+      return chat;
     },
   },
 });
