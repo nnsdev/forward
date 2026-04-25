@@ -209,6 +209,7 @@ export const SceneSchema = z.object({
   chatId: z.string().min(1),
   title: z.string().min(1),
   description: z.string().default(''),
+  backgroundAssetPath: z.string().nullable(),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(false),
   createdAt: z.string().datetime(),
@@ -225,6 +226,7 @@ export const CreateSceneInputSchema = z.object({
 export const UpdateSceneInputSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
+  backgroundAssetPath: z.string().nullable().optional(),
   sortOrder: z.number().int().optional(),
   isActive: z.boolean().optional(),
 });

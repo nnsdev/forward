@@ -82,6 +82,7 @@ export const scenes = sqliteTable('scenes', {
   chatId: text('chat_id').notNull(),
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
+  backgroundAssetPath: text('background_asset_path'),
   sortOrder: integer('sort_order').notNull().default(0),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
   ...timestamps,

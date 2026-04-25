@@ -367,4 +367,18 @@ export const api = {
   async getMessageTree(chatId: string): Promise<Message[]> {
     return expectJson<Message[]>(`/chats/${chatId}/tree`);
   },
+  async searchMessages(chatId: string, query: string): Promise<Message[]> {
+    return expectJson<Message[]>(`/chats/${chatId}/search?q=${encodeURIComponent(query)}`);
+  },
+  async exportChat(chatId: string, format: 'json' | 'markdown' | 'html'): Promise<Response> {
+    return request(`/chats/${chatId}/export?format=${format}`);
+  },
+  async uploadSceneBackground(sceneId: string, file: File): Promise<Scene> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return expectJson<Scene>(`/scenes/${sceneId}/background`, {
+      body: formData,
+      method: 'POST',
+    });
+  },
 };

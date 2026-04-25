@@ -404,6 +404,20 @@ async function persistAvatar(config: AppConfig, filename: string, buffer: Buffer
   return fullPath;
 }
 
+async function persistBackground(config: AppConfig, filename: string, buffer: Buffer): Promise<string> {
+  const bgDir = resolve(config.mediaRoot, 'backgrounds');
+
+  await mkdir(bgDir, { recursive: true });
+
+  const extension = extname(filename) || '.png';
+  const finalName = `${sanitizeFileStem(basename(filename, extension))}-${crypto.randomUUID()}${extension}`;
+  const fullPath = join(bgDir, finalName);
+
+  await writeFile(fullPath, buffer);
+
+  return fullPath;
+}
+
 const GenerateChatRouteSchema = z.object({
   content: z.string().min(1),
   maxOutputTokens: z.number().int().positive().max(1024).optional(),
@@ -941,6 +955,19 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.json(activated);
   });
 
+  app.post('/scenes/:sceneId/background', async (c) => {
+    const scene = await dependencies.scenes.getById(c.req.param('sceneId'));
+    if (!scene) return c.json({ error: 'Scene not found' }, 404);
+    const formData = await c.req.formData();
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
+      return c.json({ error: 'Background file is required' }, 400);
+    }
+    const assetPath = await persistBackground(config, file.name || 'background.png', Buffer.from(await file.arrayBuffer()));
+    const updated = await dependencies.scenes.update(scene.id, { backgroundAssetPath: assetPath });
+    return c.json(updated);
+  });
+
   app.post('/chats/:chatId/messages', async (c) => {
     try {
       const chat = await getRequiredChat(dependencies, c.req.param('chatId'));
@@ -976,6 +1003,61 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     if (!chat) return c.json({ error: 'Chat not found' }, 404);
     const allMessages = await dependencies.messages.listByChatId(chat.id);
     return c.json(allMessages);
+  });
+
+  app.get('/chats/:chatId/search', async (c) => {
+    const chat = await dependencies.chats.getById(c.req.param('chatId'));
+    if (!chat) return c.json({ error: 'Chat not found' }, 404);
+    const query = c.req.query('q');
+    if (!query || query.trim().length < 2) {
+      return c.json({ error: 'Query must be at least 2 characters' }, 400);
+    }
+    return c.json(await dependencies.messages.searchByChatId(chat.id, query.trim()));
+  });
+
+  app.get('/chats/:chatId/export', async (c) => {
+    const chat = await dependencies.chats.getById(c.req.param('chatId'));
+    if (!chat) return c.json({ error: 'Chat not found' }, 404);
+    const format = c.req.query('format') ?? 'markdown';
+    const msgs = await dependencies.messages.listByChatId(chat.id);
+    const character = chat.characterId ? await dependencies.characters.getById(chat.characterId) : null;
+    const settings = await dependencies.appSettings.get();
+
+    if (format === 'json') {
+      return c.json({
+        character: character ?? null,
+        chat,
+        exportedAt: new Date().toISOString(),
+        messages: msgs,
+      });
+    }
+
+    if (format === 'html') {
+      const lines = [
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>', chat.title, '</title>',
+        '<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;line-height:1.7;color:#222}',
+        '.msg{margin:16px 0;padding:12px 16px;border-radius:8px}',
+        '.user{background:#f3f4f6;text-align:right}',
+        '.assistant{background:#eef2ff}',
+        '.meta{font-size:12px;color:#666;margin-bottom:4px}',
+        '</style></head><body>',
+        '<h1>', chat.title, '</h1>',
+      ];
+      for (const msg of msgs) {
+        const name = msg.role === 'assistant' ? (character?.name ?? 'Assistant') : (settings.personaName || 'You');
+        lines.push(`<div class="msg ${msg.role}"><div class="meta">${name}</div><div>${msg.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div></div>`);
+      }
+      lines.push('</body></html>');
+      return new Response(lines.join(''), { headers: { 'content-type': 'text/html; charset=utf-8', 'content-disposition': `attachment; filename="${chat.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'chat'}.html"` } });
+    }
+
+    // markdown default
+    const lines = [`# ${chat.title}\n`];
+    for (const msg of msgs) {
+      const name = msg.role === 'assistant' ? (character?.name ?? 'Assistant') : (settings.personaName || 'You');
+      lines.push(`**${name}**\n\n${msg.content}\n`);
+    }
+    return new Response(lines.join('\n'), { headers: { 'content-type': 'text/markdown; charset=utf-8', 'content-disposition': `attachment; filename="${chat.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'chat'}.md"` } });
   });
 
   app.post('/messages/:messageId/fork', async (c) => {

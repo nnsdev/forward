@@ -249,15 +249,17 @@ export const useChatStore = defineStore('chat', {
 
       return this.createNewChat();
     },
-    async createNewChat(): Promise<Chat> {
+    async createNewChat(characterId?: string | null): Promise<Chat> {
       const provider = this.defaultProvider;
       const preset = this.activePreset ?? this.presets[0] ?? null;
+      const character = characterId ? this.characters.find((c) => c.id === characterId) : null;
       const chat = await api.createChat({
         authorNote: '',
         authorNoteDepth: 0,
+        characterId: characterId ?? null,
         presetId: preset?.id,
         providerConfigId: provider?.id,
-        title: `Chat ${this.chats.length + 1}`,
+        title: character?.name ? `Chat with ${character.name}` : `Chat ${this.chats.length + 1}`,
       });
 
       this.chats = [chat, ...this.chats];
@@ -728,6 +730,29 @@ export const useChatStore = defineStore('chat', {
       this.activeChatId = chat.id;
       await this.loadMessages(chat.id);
       return chat;
+    },
+    async searchMessages(query: string) {
+      if (!this.activeChatId || query.trim().length < 2) return [];
+      return api.searchMessages(this.activeChatId, query.trim());
+    },
+    async exportChat(format: 'json' | 'markdown' | 'html') {
+      if (!this.activeChatId) return;
+      const response = await api.exportChat(this.activeChatId, format);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = format === 'json' ? 'json' : format === 'html' ? 'html' : 'md';
+      const title = this.activeChat?.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'chat';
+      a.download = `${title}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    async uploadSceneBackground(sceneId: string, file: File) {
+      const scene = await api.uploadSceneBackground(sceneId, file);
+      const list = this.scenesByChatId[scene.chatId] ?? [];
+      this.scenesByChatId[scene.chatId] = list.map((s) => (s.id === scene.id ? scene : s));
+      return scene;
     },
   },
 });

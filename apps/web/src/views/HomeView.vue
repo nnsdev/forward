@@ -22,7 +22,7 @@
         <button
           v-for="chat in chatStore.chats"
           :key="chat.id"
-          class="group mb-0.5 w-full rounded-lg px-3 py-2 text-left text-sm transition"
+          class="group relative mb-0.5 w-full rounded-lg px-3 py-2 text-left text-sm transition"
           :class="chat.id === chatStore.activeChatId ? 'bg-white/[0.06] text-white' : 'text-white/45 hover:bg-white/[0.03] hover:text-white/75'"
           @click="chatStore.selectChat(chat.id)"
         >
@@ -46,6 +46,22 @@
             >
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 2l3 3L5 14H2v-3z"/></svg>
             </button>
+            <button
+              class="hidden shrink-0 text-[10px] text-white/20 hover:text-white/50 group-hover:inline"
+              type="button"
+              title="Export"
+              @click.stop="showExportMenuFor = showExportMenuFor === chat.id ? null : chat.id"
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1v10M4 7l4 4 4-4M2 15h12"/></svg>
+            </button>
+            <div
+              v-if="showExportMenuFor === chat.id"
+              class="absolute left-48 z-40 w-28 rounded-lg border border-white/10 bg-[var(--rp-bg)] py-1 shadow-lg"
+            >
+              <button class="block w-full px-3 py-1.5 text-left text-[11px] text-white/50 hover:bg-white/[0.04] hover:text-white/80" @click.stop="chatStore.activeChatId = chat.id; exportChat('markdown'); showExportMenuFor = null">Markdown</button>
+              <button class="block w-full px-3 py-1.5 text-left text-[11px] text-white/50 hover:bg-white/[0.04] hover:text-white/80" @click.stop="chatStore.activeChatId = chat.id; exportChat('html'); showExportMenuFor = null">HTML</button>
+              <button class="block w-full px-3 py-1.5 text-left text-[11px] text-white/50 hover:bg-white/[0.04] hover:text-white/80" @click.stop="chatStore.activeChatId = chat.id; exportChat('json'); showExportMenuFor = null">JSON</button>
+            </div>
             <button
               class="hidden shrink-0 text-[10px] text-white/20 hover:text-rose-300/60 group-hover:inline"
               type="button"
@@ -149,6 +165,29 @@
               {{ mode }}
             </button>
           </div>
+          <div class="relative">
+            <input
+              v-model="searchQuery"
+              class="w-32 rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1 text-xs text-white outline-none transition focus:w-48 focus:border-[var(--rp-accent)]/35"
+              placeholder="Search..."
+              @input="debouncedSearch"
+              @keydown.escape="searchQuery = ''; searchResults = []"
+            />
+            <div
+              v-if="searchResults.length"
+              class="absolute right-0 top-8 z-40 w-72 max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-[var(--rp-bg)] p-2 shadow-lg"
+            >
+              <button
+                v-for="result in searchResults"
+                :key="result.id"
+                class="w-full rounded-md px-2 py-1.5 text-left text-xs text-white/60 transition hover:bg-white/[0.04] hover:text-white/90"
+                @click="jumpToMessage(result.id)"
+              >
+                <span class="text-[10px] uppercase tracking-wider text-white/25">{{ result.role }}</span>
+                <p class="line-clamp-2">{{ result.content }}</p>
+              </button>
+            </div>
+          </div>
           <button
             class="rounded-lg px-3 py-1.5 text-[11px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/55"
             @click="characterPanelOpen = !characterPanelOpen"
@@ -198,7 +237,14 @@
           <p v-else class="text-sm text-white/25">Attach a character or type a message below.</p>
         </div>
 
-        <div v-else class="px-6 py-5 lg:px-10">
+        <div v-else :class="chatStore.displayMode !== 'chat' && activeSceneBackgroundUrl ? 'relative px-6 py-5 lg:px-10' : 'px-6 py-5 lg:px-10'">
+          <div
+            v-if="chatStore.displayMode !== 'chat' && activeSceneBackgroundUrl"
+            class="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            :style="{ backgroundImage: `url(${activeSceneBackgroundUrl})` }"
+          >
+            <div class="absolute inset-0 bg-black/60" />
+          </div>
           <!-- Chat Mode -->
           <div v-if="chatStore.displayMode === 'chat'" class="space-y-5">
             <MessageCard
@@ -636,6 +682,10 @@
                   >
                     {{ scene.isActive ? 'Active' : 'Use' }}
                   </button>
+                  <label class="cursor-pointer rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50">
+                    BG
+                    <input class="hidden" type="file" accept="image/*" @change="(e) => uploadSceneBackground(e, scene.id)" />
+                  </label>
                   <button class="rounded px-2 py-0.5 text-[11px] text-white/25 transition hover:text-white/50" type="button" @click="editScene(scene.id)">
                     Edit
                   </button>
@@ -645,6 +695,9 @@
                 </div>
               </div>
               <p v-if="scene.description" class="mt-0.5 text-xs text-white/25">{{ scene.description }}</p>
+              <div v-if="scene.backgroundAssetPath" class="mt-1.5 h-16 w-full overflow-hidden rounded-md bg-white/[0.02]">
+                <img :src="`${apiBaseUrl}/media/backgrounds/${scene.backgroundAssetPath.split(/[/\\]/).pop()}`" alt="" class="h-full w-full object-cover opacity-60" />
+              </div>
             </div>
             <div v-if="!chatStore.activeScenes.length" class="px-3 py-4 text-center text-xs text-white/20">
               No scenes yet
@@ -1079,7 +1132,7 @@
 </template>
 
 <script setup lang="ts">
-import type { CreateCharacterInput, CreatePresetInput, CreateProviderConfigInput, InstructTemplate } from '@forward/shared';
+import type { CreateCharacterInput, CreatePresetInput, CreateProviderConfigInput, InstructTemplate, Message } from '@forward/shared';
 import { BUILT_IN_TEMPLATES } from '@forward/shared';
 import { reactive, onMounted, ref, computed, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
@@ -1095,6 +1148,7 @@ function renderNovelSegment(content: string): string {
   return renderMarkdown(content).replace(/<p>/g, '<span class="novel-segment">').replace(/<\/p>/g, '</span>');
 }
 
+const apiBaseUrl = getApiBaseUrl();
 const chatStore = useChatStore();
 const authorNoteDraft = ref('');
 const authorNoteDepthDraft = ref(0);
@@ -1127,6 +1181,10 @@ const passwordForm = reactive({ current: '', next: '' });
 const personaForm = reactive({ description: '', name: 'User' });
 const newStateKey = ref('');
 const newStateValue = ref('');
+const searchQuery = ref('');
+const searchResults = ref<Message[]>([]);
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+const showExportMenuFor = ref<string | null>(null);
 const characterForm = reactive<CreateCharacterInput>({
   avatarAssetPath: null,
   description: '',
@@ -1269,6 +1327,12 @@ const personaAvatarStyle = computed(() => avatarStyleForName(personaForm.name ||
 const personaAvatarUrl = computed(() => {
   if (!chatStore.appSettings?.personaAvatarAssetPath) return null;
   return avatarUrlFor(chatStore.appSettings.personaAvatarAssetPath);
+});
+
+const activeSceneBackgroundUrl = computed(() => {
+  const scene = chatStore.activeScenes.find((s) => s.isActive);
+  if (!scene?.backgroundAssetPath) return null;
+  return `${apiBaseUrl}/media/backgrounds/${scene.backgroundAssetPath.split(/[/\\]/).pop()}`;
 });
 
 function scrollToBottom() {
@@ -1712,5 +1776,39 @@ async function updateCharacterStateValue(stateId: string, value: string) {
 
 async function removeCharacterState(stateId: string) {
   await chatStore.deleteCharacterState(stateId);
+}
+
+function debouncedSearch() {
+  if (searchDebounce) clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(async () => {
+    if (searchQuery.value.trim().length < 2) {
+      searchResults.value = [];
+      return;
+    }
+    searchResults.value = await chatStore.searchMessages(searchQuery.value);
+  }, 250);
+}
+
+function jumpToMessage(messageId: string) {
+  searchQuery.value = '';
+  searchResults.value = [];
+  const el = document.getElementById(`msg-${messageId}`);
+  if (el && scrollContainer.value) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-1', 'ring-[var(--rp-accent)]');
+    setTimeout(() => el.classList.remove('ring-1', 'ring-[var(--rp-accent)]'), 1500);
+  }
+}
+
+async function exportChat(format: 'json' | 'markdown' | 'html') {
+  await chatStore.exportChat(format);
+}
+
+async function uploadSceneBackground(event: Event, sceneId: string) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  await chatStore.uploadSceneBackground(sceneId, file);
+  input.value = '';
 }
 </script>

@@ -85,6 +85,7 @@ export interface MessageRepository {
   delete(id: string): Promise<void>;
   getById(id: string): Promise<Message | null>;
   listByChatId(chatId: string): Promise<Message[]>;
+  searchByChatId(chatId: string, query: string): Promise<Message[]>;
   setActiveAttempt(messageId: string): Promise<Message>;
   updateContent(id: string, content: string): Promise<Message>;
   updateState(id: string, state: MessageState): Promise<Message>;
@@ -224,6 +225,7 @@ function mapAppSettings(row: typeof appSettings.$inferSelect): AppSettings {
 
 function mapScene(row: typeof scenes.$inferSelect): Scene {
   return SceneSchema.parse({
+    backgroundAssetPath: row.backgroundAssetPath ?? null,
     chatId: row.chatId,
     createdAt: row.createdAt,
     description: row.description,
@@ -785,6 +787,12 @@ export function createMessageRepository(client: SqliteDatabaseClient): MessageRe
     async listByChatId(chatId) {
       return client.db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(messages.createdAt).all().map(mapMessage);
     },
+    async searchByChatId(chatId, query) {
+      const pattern = `%${query.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+      const stmt = client.sqlite.prepare(`SELECT * FROM messages WHERE chat_id = ? AND content LIKE ? ESCAPE '\\' ORDER BY created_at`);
+      const rows = stmt.all(chatId, pattern) as unknown as Array<typeof messages.$inferSelect>;
+      return rows.map(mapMessage);
+    },
     async setActiveAttempt(messageId) {
       const existing = getRequiredMessage(messageId);
 
@@ -869,6 +877,7 @@ export function createSceneRepository(client: SqliteDatabaseClient): SceneReposi
       client.db
         .insert(scenes)
         .values({
+          backgroundAssetPath: null,
           chatId: input.chatId,
           createdAt: timestamp,
           description: input.description ?? '',
@@ -900,6 +909,7 @@ export function createSceneRepository(client: SqliteDatabaseClient): SceneReposi
       client.db
         .update(scenes)
         .set({
+          backgroundAssetPath: input.backgroundAssetPath === undefined ? existing.backgroundAssetPath : input.backgroundAssetPath,
           description: input.description === undefined ? existing.description : input.description,
           isActive: input.isActive === undefined ? existing.isActive : input.isActive,
           sortOrder: input.sortOrder === undefined ? existing.sortOrder : input.sortOrder,
