@@ -46,6 +46,7 @@ export const characters = sqliteTable('characters', {
   firstMessage: text('first_message').notNull(),
   exampleDialogue: text('example_dialogue').notNull(),
   avatarAssetPath: text('avatar_asset_path'),
+  voiceReferenceId: text('voice_reference_id'),
   ...timestamps,
 });
 
@@ -105,6 +106,7 @@ export const appSettings = sqliteTable('app_settings', {
   personaName: text('persona_name').notNull().default('User'),
   showReasoningByDefault: integer('show_reasoning_by_default', { mode: 'boolean' }).notNull().default(false),
   displayMode: text('display_mode').notNull().default('chat'),
+  ttsServerUrl: text('tts_server_url'),
   ...timestamps,
 });
 

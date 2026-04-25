@@ -102,6 +102,16 @@
     </div>
     <div v-if="messageId" class="absolute -top-1 right-0 flex gap-1 opacity-0 transition group-hover:opacity-100">
       <button
+        v-if="voiceReferenceId"
+        type="button"
+        class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-[var(--rp-accent)]"
+        :class="speaking ? 'animate-pulse text-[var(--rp-accent)]' : ''"
+        title="Speak"
+        @click="speak"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5v6M4 3v10l6-5-6-5z"/></svg>
+      </button>
+      <button
         type="button"
         class="rounded px-1.5 py-0.5 text-[10px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/60"
         title="Fork conversation"
@@ -203,6 +213,7 @@ import DOMPurify from 'dompurify';
 import { computed, nextTick, ref } from 'vue';
 
 import { getApiBaseUrl } from '../lib/config';
+import { api } from '../lib/api';
 import { highlightQuotes, renderMarkdown } from '../lib/markdown';
 
 const props = defineProps<{
@@ -211,6 +222,7 @@ const props = defineProps<{
   reasoning?: string;
   characterName?: string;
   characterAvatarPath?: string | null;
+  voiceReferenceId?: string | null;
   attemptPosition?: number;
   attemptTotal?: number;
   previousAttemptId?: string | null;
@@ -235,6 +247,28 @@ const expanded = ref(false);
 const editing = ref(false);
 const editDraft = ref('');
 const editRef = ref<HTMLTextAreaElement | null>(null);
+const speaking = ref(false);
+
+async function speak() {
+  if (!props.content || speaking.value) return;
+  speaking.value = true;
+  try {
+    const blob = await api.speak(props.content, props.voiceReferenceId);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    await audio.play();
+    audio.addEventListener('ended', () => {
+      URL.revokeObjectURL(url);
+      speaking.value = false;
+    });
+    audio.addEventListener('error', () => {
+      URL.revokeObjectURL(url);
+      speaking.value = false;
+    });
+  } catch {
+    speaking.value = false;
+  }
+}
 
 function startEdit() {
   editDraft.value = props.content;

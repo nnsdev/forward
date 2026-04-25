@@ -381,4 +381,16 @@ export const api = {
       method: 'POST',
     });
   },
+  async speak(text: string, referenceId?: string | null): Promise<Blob> {
+    const response = await request('/tts', {
+      body: JSON.stringify({ text, referenceId }),
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error('TTS request failed');
+    }
+
+    return response.blob();
+  },
 };

@@ -11,6 +11,7 @@ export const AppSettingsSchema = z.object({
   personaName: z.string(),
   showReasoningByDefault: z.boolean(),
   displayMode: DisplayModeSchema,
+  ttsServerUrl: z.string().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -24,6 +25,7 @@ export const UpdateAppSettingsInputSchema = z
     personaName: z.string().optional(),
     showReasoningByDefault: z.boolean().optional(),
     displayMode: DisplayModeSchema.optional(),
+    ttsServerUrl: z.string().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'At least one field must be updated');
 

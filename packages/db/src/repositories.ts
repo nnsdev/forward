@@ -150,6 +150,7 @@ function mapCharacter(row: typeof characters.$inferSelect): Character {
     name: row.name,
     personality: row.personality,
     scenario: row.scenario,
+    voiceReferenceId: row.voiceReferenceId ?? null,
   });
 }
 
@@ -219,6 +220,7 @@ function mapAppSettings(row: typeof appSettings.$inferSelect): AppSettings {
     personaDescription: row.personaDescription,
     personaName: row.personaName,
     showReasoningByDefault: row.showReasoningByDefault,
+    ttsServerUrl: row.ttsServerUrl ?? null,
     updatedAt: row.updatedAt,
   });
 }
@@ -260,18 +262,19 @@ export function createAppSettingsRepository(client: SqliteDatabaseClient): AppSe
 
     const timestamp = nowIso();
 
-    client.db.insert(appSettings).values({
-      createdAt: timestamp,
-      defaultPresetId: null,
-      defaultProviderConfigId: null,
-      displayMode: 'chat',
-      id: SETTINGS_ID,
-      personaAvatarAssetPath: null,
-      personaDescription: '',
-      personaName: 'User',
-      showReasoningByDefault: false,
-      updatedAt: timestamp,
-    }).run();
+      client.db.insert(appSettings).values({
+        createdAt: timestamp,
+        defaultPresetId: null,
+        defaultProviderConfigId: null,
+        displayMode: 'chat',
+        id: SETTINGS_ID,
+        personaAvatarAssetPath: null,
+        personaDescription: '',
+        personaName: 'User',
+        showReasoningByDefault: false,
+        ttsServerUrl: null,
+        updatedAt: timestamp,
+      }).run();
 
     return client.db.select().from(appSettings).where(eq(appSettings.id, SETTINGS_ID)).get()!;
   }
@@ -292,6 +295,7 @@ export function createAppSettingsRepository(client: SqliteDatabaseClient): AppSe
         personaDescription: input.personaDescription ?? existing.personaDescription,
         personaName: input.personaName ?? existing.personaName,
         showReasoningByDefault: input.showReasoningByDefault ?? existing.showReasoningByDefault,
+        ttsServerUrl: input.ttsServerUrl === undefined ? existing.ttsServerUrl : input.ttsServerUrl,
         updatedAt: timestamp,
       }).where(eq(appSettings.id, SETTINGS_ID)).run();
 
@@ -640,6 +644,7 @@ export function createCharacterRepository(client: SqliteDatabaseClient): Charact
           personality: input.personality,
           scenario: input.scenario,
           updatedAt: timestamp,
+          voiceReferenceId: input.voiceReferenceId ?? null,
         })
         .run();
 
@@ -676,6 +681,7 @@ export function createCharacterRepository(client: SqliteDatabaseClient): Charact
           personality: input.personality ?? existing.personality,
           scenario: input.scenario ?? existing.scenario,
           updatedAt: timestamp,
+          voiceReferenceId: input.voiceReferenceId === undefined ? existing.voiceReferenceId : input.voiceReferenceId,
         })
         .where(eq(characters.id, id))
         .run();

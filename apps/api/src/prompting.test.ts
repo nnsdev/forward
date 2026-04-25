@@ -55,6 +55,7 @@ const settings = {
   personaDescription: 'A quiet astronomer observing the scene.',
   personaName: 'Julien',
   showReasoningByDefault: false,
+  ttsServerUrl: null,
   updatedAt: '2026-04-22T00:00:00.000Z',
 };
 
@@ -70,6 +71,7 @@ describe('buildPromptPreview', () => {
         name: 'Artemis',
         personality: 'Calm and curious.',
         scenario: 'Watching a meteor shower.',
+        voiceReferenceId: null,
       },
       chatId: 'chat_1',
       config: baseConfig,
@@ -200,6 +202,7 @@ describe('buildPromptPreview', () => {
         name: 'Artemis',
         personality: 'Calm and curious.',
         scenario: 'Watching a meteor shower.',
+        voiceReferenceId: null,
       },
       chatId: 'chat_1',
       config: baseConfig,

@@ -20,6 +20,7 @@ export const CharacterSchema = z.object({
   firstMessage: z.string().default(''),
   exampleDialogue: z.string().default(''),
   avatarAssetPath: z.string().nullable(),
+  voiceReferenceId: z.string().nullable(),
 });
 
 export const CreateCharacterInputSchema = z.object({
@@ -30,10 +31,12 @@ export const CreateCharacterInputSchema = z.object({
   firstMessage: z.string().default(''),
   exampleDialogue: z.string().default(''),
   avatarAssetPath: z.string().nullable().optional(),
+  voiceReferenceId: z.string().nullable().optional(),
 });
 
 export const UpdateCharacterInputSchema = CreateCharacterInputSchema.partial().extend({
   name: z.string().min(1).optional(),
+  voiceReferenceId: z.string().nullable().optional(),
 });
 
 export const ProviderTypeSchema = z.enum(['openai-compatible']);

@@ -260,6 +260,7 @@
               :next-attempt-id="entry.nextAttemptId"
               :character-name="entry.message.role === 'assistant' ? chatStore.activeCharacter?.name : undefined"
               :character-avatar-path="entry.message.role === 'assistant' ? chatStore.activeCharacter?.avatarAssetPath : undefined"
+              :voice-reference-id="entry.message.role === 'assistant' ? chatStore.activeCharacter?.voiceReferenceId : undefined"
               :user-name="entry.message.role === 'user' ? chatStore.appSettings?.personaName : undefined"
               :user-avatar-path="entry.message.role === 'user' ? chatStore.appSettings?.personaAvatarAssetPath : undefined"
               :is-summary="entry.message.summaryOf.length > 0"
@@ -560,6 +561,11 @@
             v-model="characterForm.exampleDialogue"
             class="min-h-20 w-full resize-none rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
             placeholder="Example dialogue"
+          />
+          <input
+            v-model="characterForm.voiceReferenceId"
+            class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Voice reference ID (Fish Speech)"
           />
           <div class="flex gap-2">
             <button
@@ -1107,6 +1113,14 @@
           class="min-h-28 w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
           placeholder="Persona description"
         />
+        <div class="border-t border-white/5 pt-3">
+          <p class="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/25">TTS</p>
+          <input
+            v-model="personaForm.ttsServerUrl"
+            class="w-full rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--rp-accent)]/35"
+            placeholder="Fish Speech server URL (e.g. http://192.168.1.100:8080)"
+          />
+        </div>
         <div class="flex gap-2">
           <button
             class="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
@@ -1178,7 +1192,7 @@ const editingSceneId = ref<string | null>(null);
 const sceneForm = reactive({ title: '', description: '', sortOrder: 0 });
 const passwordError = ref('');
 const passwordForm = reactive({ current: '', next: '' });
-const personaForm = reactive({ description: '', name: 'User' });
+const personaForm = reactive({ description: '', name: 'User', ttsServerUrl: '' });
 const newStateKey = ref('');
 const newStateValue = ref('');
 const searchQuery = ref('');
@@ -1193,6 +1207,7 @@ const characterForm = reactive<CreateCharacterInput>({
   name: '',
   personality: '',
   scenario: '',
+  voiceReferenceId: null,
 });
 const presetForm = reactive<CreatePresetInput>({
   contextLength: 131072,
@@ -1375,6 +1390,7 @@ onMounted(async () => {
   await chatStore.initialize();
   personaForm.name = chatStore.appSettings?.personaName ?? 'User';
   personaForm.description = chatStore.appSettings?.personaDescription ?? '';
+  personaForm.ttsServerUrl = chatStore.appSettings?.ttsServerUrl ?? '';
   scrollToBottom();
   await checkFirstMessage();
 });
@@ -1383,6 +1399,7 @@ watch(() => chatStore.appSettings, (settings) => {
   if (!settings) return;
   personaForm.name = settings.personaName;
   personaForm.description = settings.personaDescription;
+  personaForm.ttsServerUrl = settings.ttsServerUrl ?? '';
 }, { deep: true });
 
 async function checkFirstMessage() {
@@ -1429,6 +1446,7 @@ function resetCharacterForm() {
   characterForm.scenario = '';
   characterForm.firstMessage = '';
   characterForm.exampleDialogue = '';
+  characterForm.voiceReferenceId = null;
   showCharacterEditor.value = false;
 }
 
@@ -1443,6 +1461,7 @@ function editCharacter(characterId: string) {
   characterForm.scenario = character.scenario;
   characterForm.firstMessage = character.firstMessage;
   characterForm.exampleDialogue = character.exampleDialogue;
+  characterForm.voiceReferenceId = character.voiceReferenceId;
 }
 
 async function saveCharacter() {
@@ -1468,6 +1487,7 @@ async function savePersona() {
   await chatStore.updateSettings({
     personaDescription: personaForm.description,
     personaName: personaForm.name.trim() || 'User',
+    ttsServerUrl: personaForm.ttsServerUrl.trim() || null,
   });
   showPersonaEditor.value = false;
 }

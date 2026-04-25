@@ -788,6 +788,36 @@ export function createApp(config: AppConfig, dependencies: AppDependencies) {
     return c.json(settings);
   });
 
+  app.post('/tts', async (c) => {
+    const body = await c.req.json();
+    const settings = await dependencies.appSettings.get();
+    const ttsServerUrl = settings.ttsServerUrl;
+
+    if (!ttsServerUrl) {
+      return c.json({ error: 'TTS server URL not configured' }, 400);
+    }
+
+    const response = await fetch(`${ttsServerUrl}/v1/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: body.text,
+        reference_id: body.referenceId ?? undefined,
+        format: 'mp3',
+      }),
+    });
+
+    if (!response.ok) {
+      return c.json({ error: 'TTS generation failed' }, 502);
+    }
+
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
+
+    return new Response(audioBuffer, {
+      headers: { 'Content-Type': 'audio/mpeg' },
+    });
+  });
+
   app.get('/providers', async (c) => {
     const payload = ProviderListResponseSchema.parse({
       providers: await dependencies.providerConfigs.list(),
