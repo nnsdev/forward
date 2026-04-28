@@ -45,6 +45,7 @@ import type { AppConfig } from './config';
 import { createMockStreamEvents, mockPromptPreview } from './mock-data';
 import { importPresetTemplateFile } from './preset-import';
 import { buildPromptPreview } from './prompting';
+import { createReasoningExtractor } from './reasoning-extractor';
 import type { AppDependencies } from './runtime';
 
 const webDistRoot = resolve('apps/web/dist');
@@ -237,6 +238,11 @@ async function forwardAssistantStream(
   let completed = false;
   let rawContent = '';
   const chatId = chat.id;
+  const reasoningPrefix = preset.instructTemplate?.reasoningPrefix;
+  const reasoningSuffix = preset.instructTemplate?.reasoningSuffix;
+  const extractor = reasoningPrefix && reasoningSuffix
+    ? createReasoningExtractor(reasoningPrefix, reasoningSuffix)
+    : null;
 
   await writeStreamEvent(stream, {
     chatId,
@@ -257,18 +263,67 @@ async function forwardAssistantStream(
       }
 
       if (chunk.kind === 'content' && chunk.text) {
-        await dependencies.messages.appendContent(messageId, chunk.text);
-        rawContent += chunk.text;
-        await writeStreamEvent(stream, {
-          chatId,
-          messageId,
-          text: chunk.text,
-          type: 'content.delta',
-        });
+        if (extractor) {
+          const parts = extractor.extract(chunk.text);
+          for (const part of parts) {
+            if (part.type === 'reasoning') {
+              await dependencies.messages.appendReasoning(messageId, part.text);
+              await writeStreamEvent(stream, {
+                chatId,
+                messageId,
+                text: part.text,
+                type: 'reasoning.delta',
+              });
+            } else {
+              await dependencies.messages.appendContent(messageId, part.text);
+              rawContent += part.text;
+              await writeStreamEvent(stream, {
+                chatId,
+                messageId,
+                text: part.text,
+                type: 'content.delta',
+              });
+            }
+          }
+        } else {
+          await dependencies.messages.appendContent(messageId, chunk.text);
+          rawContent += chunk.text;
+          await writeStreamEvent(stream, {
+            chatId,
+            messageId,
+            text: chunk.text,
+            type: 'content.delta',
+          });
+        }
       }
 
       if (chunk.kind === 'done' && !completed) {
         completed = true;
+      }
+    }
+
+    // Flush any remaining buffered text from the extractor.
+    if (extractor) {
+      const parts = extractor.flush();
+      for (const part of parts) {
+        if (part.type === 'reasoning') {
+          await dependencies.messages.appendReasoning(messageId, part.text);
+          await writeStreamEvent(stream, {
+            chatId,
+            messageId,
+            text: part.text,
+            type: 'reasoning.delta',
+          });
+        } else {
+          await dependencies.messages.appendContent(messageId, part.text);
+          rawContent += part.text;
+          await writeStreamEvent(stream, {
+            chatId,
+            messageId,
+            text: part.text,
+            type: 'content.delta',
+          });
+        }
       }
     }
 

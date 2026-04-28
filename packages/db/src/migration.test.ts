@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { initializeDatabase } from './src/bootstrap';
-import { createSqliteDatabase } from './src/client';
-import { createRepositories } from './src/repositories';
+import { initializeDatabase } from './bootstrap';
+import { createSqliteDatabase } from './client';
+import { createRepositories } from './repositories';
 
 describe('migration test', () => {
   it('has tts columns after migration', () => {
