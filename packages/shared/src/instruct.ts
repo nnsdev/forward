@@ -25,6 +25,9 @@ export const InstructTemplateSchema = z.object({
   exampleSeparator: z.string().default(''),
   chatStart: z.string().default(''),
   activationRegex: z.string().default(''),
+  reasoningPrefix: z.string().default(''),
+  reasoningSuffix: z.string().default(''),
+  reasoningSeparator: z.string().default(''),
 });
 
 export type InstructTemplate = z.infer<typeof InstructTemplateSchema>;
@@ -57,6 +60,9 @@ export const CHAT_ML_TEMPLATE: InstructTemplate = {
   systemSuffix: '<|im_end|>\n',
   userAlignmentMessage: '',
   wrap: true,
+  reasoningPrefix: '',
+  reasoningSuffix: '',
+  reasoningSeparator: '',
 };
 
 export const MISTRAL_TEMPLATE: InstructTemplate = {
@@ -84,6 +90,9 @@ export const MISTRAL_TEMPLATE: InstructTemplate = {
   systemSuffix: '',
   userAlignmentMessage: "Let's get started. Please respond based on the information and instructions provided above.",
   wrap: false,
+  reasoningPrefix: '',
+  reasoningSuffix: '',
+  reasoningSeparator: '',
 };
 
 export const ALPACA_TEMPLATE: InstructTemplate = {
@@ -111,6 +120,9 @@ export const ALPACA_TEMPLATE: InstructTemplate = {
   systemSuffix: '\n',
   userAlignmentMessage: '',
   wrap: true,
+  reasoningPrefix: '',
+  reasoningSuffix: '',
+  reasoningSeparator: '',
 };
 
 export const PLAIN_TEMPLATE: InstructTemplate = {
@@ -138,6 +150,9 @@ export const PLAIN_TEMPLATE: InstructTemplate = {
   systemSuffix: '\n\n',
   userAlignmentMessage: '',
   wrap: false,
+  reasoningPrefix: '',
+  reasoningSuffix: '',
+  reasoningSeparator: '',
 };
 
 export const BUILT_IN_TEMPLATES: Array<InstructTemplate> = [
@@ -146,6 +161,12 @@ export const BUILT_IN_TEMPLATES: Array<InstructTemplate> = [
   ALPACA_TEMPLATE,
   PLAIN_TEMPLATE,
 ];
+
+function extractReasoningField(raw: Record<string, unknown>, key: string): string {
+  const reasoning = raw.reasoning as Record<string, unknown> | undefined;
+
+  return String(reasoning?.[key] ?? raw[`reasoning_${key}`] ?? '');
+}
 
 export function normalizeSillyTavernInstruct(raw: Record<string, unknown>): InstructTemplate {
   return InstructTemplateSchema.parse({
@@ -173,6 +194,9 @@ export function normalizeSillyTavernInstruct(raw: Record<string, unknown>): Inst
     systemSuffix: String(raw.system_suffix ?? ''),
     userAlignmentMessage: String(raw.user_alignment_message ?? ''),
     wrap: Boolean(raw.wrap ?? true),
+    reasoningPrefix: extractReasoningField(raw, 'prefix'),
+    reasoningSuffix: extractReasoningField(raw, 'suffix'),
+    reasoningSeparator: extractReasoningField(raw, 'separator'),
   });
 }
 

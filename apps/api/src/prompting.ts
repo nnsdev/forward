@@ -77,6 +77,18 @@ function buildPersonaSection(settings: AppSettings): string | undefined {
   ]);
 }
 
+function buildReasoningInstruction(template: InstructTemplate, reasoningEnabled: boolean): string | undefined {
+  if (!reasoningEnabled || !template.reasoningPrefix) {
+    return undefined;
+  }
+
+  if (template.reasoningSuffix) {
+    return `When reasoning, wrap your thoughts in ${template.reasoningPrefix} ... ${template.reasoningSuffix} tags${template.reasoningSeparator ? `, separated from your final answer by ${JSON.stringify(template.reasoningSeparator)}` : ''}.`;
+  }
+
+  return `When reasoning, begin with ${template.reasoningPrefix}.`;
+}
+
 function buildStructuredModeInstruction(characterName: string, characterStates: CharacterState[]): string {
   const exampleStateUpdates = characterStates.length > 0
     ? Object.fromEntries(characterStates.map((s) => [s.key, s.value]))
@@ -275,11 +287,13 @@ export async function buildPromptPreview(input: BuildPromptInput): Promise<Promp
   const structuredInstruction = input.preset.structuredMode && resolvedCharacter
     ? buildStructuredModeInstruction(resolvedCharacter.name, states)
     : undefined;
+  const reasoningInstruction = buildReasoningInstruction(template, input.provider.reasoningEnabled);
   const mergedSystemPrompt = compactSections([
     baseSystemPrompt,
     buildPersonaSection(input.settings),
     sceneSection,
     structuredInstruction,
+    reasoningInstruction,
     shouldInjectAuthorNoteIntoSystem ? `Author's note:\n${resolvedAuthorNote}` : undefined,
   ]);
 

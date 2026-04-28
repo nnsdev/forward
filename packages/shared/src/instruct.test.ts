@@ -24,6 +24,37 @@ describe('normalizeSillyTavernInstruct', () => {
     expect(result.userAlignmentMessage).toBe('Start now');
     expect(result.wrap).toBe(false);
   });
+
+  it('extracts reasoning fields from nested reasoning object', () => {
+    const result = normalizeSillyTavernInstruct({
+      input_sequence: '<|turn>user\n',
+      name: 'Gemma',
+      output_sequence: '<|turn>model\n',
+      reasoning: {
+        prefix: '<|channel>thought',
+        separator: '\n\n',
+        suffix: '<channel|>',
+      },
+    });
+
+    expect(result.reasoningPrefix).toBe('<|channel>thought');
+    expect(result.reasoningSuffix).toBe('<channel|>');
+    expect(result.reasoningSeparator).toBe('\n\n');
+  });
+
+  it('extracts reasoning fields from flat prefixed keys', () => {
+    const result = normalizeSillyTavernInstruct({
+      input_sequence: '<|turn>user\n',
+      name: 'Gemma',
+      reasoning_prefix: '<think>',
+      reasoning_separator: '\n',
+      reasoning_suffix: '</think>',
+    });
+
+    expect(result.reasoningPrefix).toBe('<think>');
+    expect(result.reasoningSuffix).toBe('</think>');
+    expect(result.reasoningSeparator).toBe('\n');
+  });
 });
 
 describe('normalizeSillyTavernContext', () => {

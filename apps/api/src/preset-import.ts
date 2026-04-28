@@ -57,6 +57,35 @@ export function buildPresetImportBase(config: AppConfig, preset: Preset | null):
   };
 }
 
+function extractNestedPayload(raw: Record<string, unknown>): Record<string, unknown> {
+  const instruct = raw.instruct as Record<string, unknown> | undefined;
+  const context = raw.context as Record<string, unknown> | undefined;
+
+  if (!instruct && !context) {
+    return raw;
+  }
+
+  const merged: Record<string, unknown> = { ...raw };
+
+  if (instruct) {
+    for (const [key, value] of Object.entries(instruct)) {
+      if (!(key in merged)) {
+        merged[key] = value;
+      }
+    }
+  }
+
+  if (context) {
+    for (const [key, value] of Object.entries(context)) {
+      if (!(key in merged)) {
+        merged[key] = value;
+      }
+    }
+  }
+
+  return merged;
+}
+
 export async function importPresetTemplateFile(
   config: AppConfig,
   file: File,
@@ -64,23 +93,24 @@ export async function importPresetTemplateFile(
 ): Promise<CreatePresetInput> {
   const text = await file.text();
   const raw = JSON.parse(text) as Record<string, unknown>;
+  const payload = extractNestedPayload(raw);
   const next = buildPresetImportBase(config, basePreset);
   let nextTemplate = next.instructTemplate ? cloneTemplate(next.instructTemplate) : cloneTemplate(PLAIN_TEMPLATE);
   let importedSomething = false;
 
-  if (isInstructTemplatePayload(raw)) {
+  if (isInstructTemplatePayload(payload)) {
     nextTemplate = {
       ...nextTemplate,
-      ...normalizeSillyTavernInstruct(raw),
+      ...normalizeSillyTavernInstruct(payload),
     };
     if (!basePreset) {
-      next.name = String(raw.name ?? next.name);
+      next.name = String(payload.name ?? next.name);
     }
     importedSomething = true;
   }
 
-  if (isContextTemplatePayload(raw)) {
-    const context = normalizeSillyTavernContext(raw);
+  if (isContextTemplatePayload(payload)) {
+    const context = normalizeSillyTavernContext(payload);
     nextTemplate = {
       ...nextTemplate,
       chatStart: context.chatStart,

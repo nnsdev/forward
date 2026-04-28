@@ -677,6 +677,81 @@ describe('api app', () => {
     expect(updatedPreset.instructTemplate.storyStringTemplate).toContain('{{description}}');
   });
 
+  it('imports a nested SillyTavern template with reasoning fields', async () => {
+    const { app } = await createTestApp();
+    const loginResponse = await app.request('/auth/login', {
+      body: JSON.stringify({ password: 'secret' }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+    const cookieHeader = loginResponse.headers.get('set-cookie');
+    const authHeaders = {
+      cookie: cookieHeader?.split(';')[0] ?? '',
+    };
+
+    const form = new FormData();
+    form.append(
+      'file',
+      new File(
+        [
+          JSON.stringify({
+            context: {
+              chat_start: '',
+              example_separator: '',
+              name: 'Gemma-4-31B-Context',
+              story_string: '{{#if system}}<|turn>system\n{{system}}<turn|>\n{{/if}}<|turn>user\n{{trim}}<turn|>\n<|turn>model\n',
+            },
+            instruct: {
+              input_sequence: '<|turn>user\n',
+              name: 'Gemma-4-31B-Official',
+              output_sequence: '<|turn>model\n',
+              system_sequence: '<|turn>system',
+            },
+            reasoning: {
+              name: 'Gemma-4-Reasoning',
+              prefix: '<|channel>thought',
+              separator: '\n\n',
+              suffix: '<channel|>',
+            },
+          }),
+        ],
+        'gemma-nested.json',
+        { type: 'application/json' },
+      ),
+    );
+
+    const response = await app.request('/presets/import', {
+      body: form,
+      headers: authHeaders,
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(201);
+    const preset = await response.json() as {
+      id: string;
+      instructTemplate: {
+        name: string;
+        inputSequence: string;
+        outputSequence: string;
+        systemSequence: string;
+        storyStringTemplate: string;
+        reasoningPrefix: string;
+        reasoningSuffix: string;
+        reasoningSeparator: string;
+      };
+    };
+    expect(preset.instructTemplate.name).toBe('Gemma-4-31B-Official');
+    expect(preset.instructTemplate.inputSequence).toBe('<|turn>user\n');
+    expect(preset.instructTemplate.outputSequence).toBe('<|turn>model\n');
+    expect(preset.instructTemplate.systemSequence).toBe('<|turn>system');
+    expect(preset.instructTemplate.storyStringTemplate).toContain('{{system}}');
+    expect(preset.instructTemplate.reasoningPrefix).toBe('<|channel>thought');
+    expect(preset.instructTemplate.reasoningSuffix).toBe('<channel|>');
+    expect(preset.instructTemplate.reasoningSeparator).toBe('\n\n');
+  });
+
   it('imports a character and lets a chat preview use it', async () => {
     const { app } = await createTestApp();
     const loginResponse = await app.request('/auth/login', {
